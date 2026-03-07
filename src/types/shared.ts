@@ -1,24 +1,81 @@
 type Decrement = [never, 0, 1, 2, 3, 4, 5];
 
+// ─── Edge Options ───
+
+export interface EdgeOptions {
+  limit?: number;
+  after?: string;
+  before?: string;
+}
+
+export interface FeedEdgeOptions extends EdgeOptions {
+  since?: number;
+  until?: number;
+  order?: ORDER;
+}
+
+export interface CommentEdgeOptions extends EdgeOptions {
+  filter?: "toplevel" | "stream";
+  summary?: boolean;
+}
+
 export type FbFieldSelector<T, D extends number = 1> = {
   [K in keyof T]?: D extends 0
     ? true
-    : NonNullable<T[K]> extends CollectionOf<infer U>
-      ? FbFieldSelector<U, Decrement[D]> | true
+    : NonNullable<T[K]> extends CollectionOf<infer U, infer O>
+      ? { options?: O; fields: FbFieldSelector<U, Decrement[D]> } | true
       : NonNullable<T[K]> extends object
         ? FbFieldSelector<NonNullable<T[K]>, Decrement[D]> | true
         : true;
 };
 
 export type FbPickDeep<T, F> = {
-  [K in Extract<keyof F, keyof T>]: Exclude<F[K], undefined> extends true
+  [K in keyof T as K extends keyof F ? K : never]: Exclude<F[K & keyof F], undefined> extends true
     ? T[K]
-    : NonNullable<T[K]> extends CollectionOf<infer U>
-      ? { data: FbPickDeep<U, Exclude<F[K], undefined>>[]; paging: Paging }
+    : Exclude<F[K & keyof F], undefined> extends { fields: infer NF }
+      ? NonNullable<T[K]> extends CollectionOf<infer U>
+        ? { data: FbPickDeep<U, NF>[]; paging: Paging }
+        : never
       : NonNullable<T[K]> extends object
-        ? FbPickDeep<NonNullable<T[K]>, Exclude<F[K], undefined | true>>
+        ? FbPickDeep<NonNullable<T[K]>, Exclude<F[K & keyof F], undefined | true>>
         : T[K];
 };
+
+export type Collection<T, F, P = Paging> = {
+  data: FbPickDeep<T, F>[];
+  paging: P;
+};
+
+export type CollectionOf<T, O extends EdgeOptions = EdgeOptions, P = Paging> = {
+  data: T[];
+  paging: P;
+  /** @internal type-level only — does not exist at runtime */
+  _edgeOptions?: O;
+};
+
+type StripTrue<T> = Exclude<T, true | undefined>;
+
+export type DeepStrict<Valid, Inferred> = {
+  [K in keyof Inferred]: K extends keyof StripTrue<Valid>
+    ? StripTrue<Valid>[K] extends boolean | undefined
+      ? StripTrue<Valid>[K]
+      : Inferred[K] extends object
+        ? DeepStrict<StripTrue<Valid>[K], Inferred[K]>
+        : StripTrue<Valid>[K]
+    : never;
+};
+
+export type ListEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 1> = <
+  F extends FbFieldSelector<T, D>,
+>(query: {
+  options?: O;
+  fields: F extends DeepStrict<FbFieldSelector<T, D>, F> ? F : DeepStrict<FbFieldSelector<T, D>, F>;
+}) => Promise<Collection<T, F>>;
+
+export type GetNode<T, D extends number = 1> = <F extends FbFieldSelector<T, D>>(
+  id: string,
+  fields: F extends DeepStrict<FbFieldSelector<T, D>, F> ? F : DeepStrict<FbFieldSelector<T, D>, F>,
+) => Promise<FbPickDeep<T, F>>;
 
 export enum ORDER {
   OLDEST = "chronological",
@@ -37,15 +94,6 @@ export interface Paging {
   };
   next?: string;
 }
-
-export type Collection<T, F extends FbFieldSelector<T, 5>, P = Paging> = {
-  data: FbPickDeep<T, F>[];
-  paging: P;
-};
-export type CollectionOf<T, P = Paging> = {
-  data: T[];
-  paging: P;
-};
 
 export interface PictureData {
   height: number;

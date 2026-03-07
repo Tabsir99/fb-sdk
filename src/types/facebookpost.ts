@@ -1,5 +1,5 @@
 import { KeysToCamel } from "../lib/transformCase.js";
-import type { CollectionOf, PictureData } from "./shared.js";
+import type { CollectionOf, CommentEdgeOptions, PictureData } from "./shared.js";
 
 export interface UserRaw {
   id: string;
@@ -13,7 +13,7 @@ export interface CommentRaw {
   created_time: string;
   is_hidden: boolean;
   from: UserRaw;
-  comments: CollectionOf<CommentRaw>;
+  comments: CollectionOf<CommentRaw, CommentEdgeOptions>;
 }
 export type Comment = KeysToCamel<CommentRaw>;
 
@@ -31,7 +31,7 @@ export interface FacebookPostRaw {
   full_picture?: string;
   shares?: { count: number };
   reactions?: { summary: { total_count: number } };
-  comments?: CollectionOf<CommentRaw> & {
+  comments?: CollectionOf<CommentRaw, CommentEdgeOptions> & {
     summary: { total_count: number };
   };
   attachments?: {

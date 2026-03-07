@@ -13,11 +13,12 @@ import {
 import { toGraphFields } from "../utils.js";
 import { toSnakeFormData } from "../lib/transformCase.js";
 import { pollReelStatus, pollVideoStatus } from "../internal/poller.js";
-import { Collection, FbFieldSelector, FbPickDeep, ORDER } from "../types/shared.js";
+import { FeedEdgeOptions, GetNode, ListEdge } from "../types/shared.js";
 import { randomUUID } from "crypto";
 import FormData from "form-data";
 import { FacebookUploadError } from "../internal/error.js";
 import { Feed } from "../types/facebookpage.js";
+import { FacebookPost } from "../types/facebookpost.js";
 
 export function createPageResource(http: HttpClient, pageId: string) {
   return {
@@ -25,25 +26,16 @@ export function createPageResource(http: HttpClient, pageId: string) {
     reels: createReelResource(http, pageId),
     images: createImageResource(http, pageId),
     feed: createFeedResource(http, pageId),
+    posts: createPostResource(http, pageId),
   };
 }
 
-export type ListFeed = <F extends FbFieldSelector<Feed["data"][0], 2>>(
-  fields: F,
-  options?: { limit?: number; since?: number; until?: number; order?: ORDER },
-) => Promise<Collection<Feed["data"][0], F>>;
+export type ListFeed = ListEdge<Feed["data"][0], FeedEdgeOptions, 2>;
 
 const createFeedResource = (http: HttpClient, pageId: string) => {
-  const list: ListFeed = async (fields, options = {}) => {
-    const { limit = 25, order = ORDER.NEWEST, since, until } = options;
+  const list: ListFeed = async (query) => {
     return http.get(`/${pageId}/feed`, {
-      params: {
-        fields: toGraphFields(fields),
-        limit,
-        order,
-        ...(since && { since }),
-        ...(until && { until }),
-      },
+      params: { fields: toGraphFields(query.fields), ...query.options },
     });
   };
 
@@ -52,11 +44,33 @@ const createFeedResource = (http: HttpClient, pageId: string) => {
   };
 };
 
-export type ListVideos = <F extends FbFieldSelector<FacebookVideo>>(
-  fields: F,
-  limit?: number,
-) => Promise<Collection<FacebookVideo, F>>;
+export type ListPosts = ListEdge<FacebookPost>;
+export type GetPost = GetNode<FacebookPost>;
+
+export const createPostResource = (http: HttpClient, pageId: string) => {
+  const get: GetPost = async (postId, fields) => {
+    return await http.get(`/${postId}`, {
+      params: {
+        fields: toGraphFields(fields),
+      },
+    });
+  };
+
+  get("", { comments: { fields: {} } });
+  const list: ListPosts = async (query) => {
+    return http.get(`/${pageId}/posts`, {
+      params: { fields: toGraphFields(query.fields), ...query.options },
+    });
+  };
+
+  return {
+    list,
+    get,
+  };
+};
+
 export type PublishVideo = (data: PublishVideoParams) => Promise<{ postId: string }>;
+export type ListVideos = ListEdge<FacebookVideo>;
 
 export function createVideoResource(http: HttpClient, pageId: string) {
   const list: ListVideos = async (fields, limit = 5) => {
@@ -103,14 +117,8 @@ export type StartUploadSession = () => Promise<{
 export type UploadFile = (uploadUrl: string, fileUrl: string) => Promise<void>;
 export type FinishUploadSession = (form: FormData) => Promise<PublishReelResponse>;
 export type PublishReel = (data: PublishReelParams) => Promise<{ postId: string }>;
-export type GetReel = <F extends FbFieldSelector<FacebookReel>>(
-  mediaId: string,
-  fields: F,
-) => Promise<FbPickDeep<FacebookReel, F>>;
-export type ListReels = <F extends FbFieldSelector<FacebookReel>>(
-  fields: F,
-  limit?: number,
-) => Promise<Collection<FacebookReel, F>>;
+export type GetReel = GetNode<FacebookReel>;
+export type ListReels = ListEdge<FacebookReel>;
 
 export function createReelResource(http: HttpClient, pageId: string) {
   const list: ListReels = async (fields, limit = 5) => {
@@ -180,14 +188,8 @@ export function createReelResource(http: HttpClient, pageId: string) {
 }
 
 export type PublishImage = (data: PublishImageParams) => Promise<{ postId: string }>;
-export type ListImages = <F extends FbFieldSelector<FacebookImage>>(
-  fields: F,
-  limit?: number,
-) => Promise<Collection<FacebookImage, F>>;
-export type GetImage = <F extends FbFieldSelector<FacebookImage>>(
-  mediaId: string,
-  fields: F,
-) => Promise<FbPickDeep<FacebookImage, F>>;
+export type ListImages = ListEdge<FacebookImage>;
+export type GetImage = GetNode<FacebookImage>;
 
 export function createImageResource(http: HttpClient, pageId: string) {
   const list: ListImages = async (fields, limit = 5) => {

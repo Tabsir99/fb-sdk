@@ -45,9 +45,11 @@ export function poll<TArgs extends unknown[], TResult>(
 export const pollVideoStatus = poll(
   async (listVideos: ListVideos, trackingId: string) => {
     const videos = await listVideos({
-      status: true,
-      postId: true,
-      universalVideoId: true,
+      fields: {
+        status: true,
+        postId: true,
+        universalVideoId: true,
+      },
     });
     const target = videos.data.find((v) => v.universalVideoId === trackingId);
     if (!target) return undefined;
