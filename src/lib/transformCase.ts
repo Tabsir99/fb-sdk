@@ -4,10 +4,16 @@ type SnakeToCamel<S extends string> = S extends `${infer H}_${infer T}`
   ? `${H}${Capitalize<SnakeToCamel<T>>}`
   : S;
 
+// export type KeysToCamel<T> = T extends (infer U)[]
+//   ? KeysToCamel<U>[]
+//   : T extends object
+//     ? { [K in keyof T as SnakeToCamel<string & K>]: KeysToCamel<T[K]> }
+//     : T;
+
 export type KeysToCamel<T> = T extends (infer U)[]
   ? KeysToCamel<U>[]
   : T extends object
-    ? { [K in keyof T as SnakeToCamel<string & K>]: KeysToCamel<T[K]> }
+    ? { [K in keyof T as K extends `_${string}` ? K : SnakeToCamel<string & K>]: KeysToCamel<T[K]> }
     : T;
 
 export function toCamel<T>(obj: T): KeysToCamel<T> {

@@ -13,11 +13,10 @@ import {
 import { toGraphFields } from "../utils.js";
 import { toSnakeFormData } from "../lib/transformCase.js";
 import { pollReelStatus, pollVideoStatus } from "../internal/poller.js";
-import { FeedEdgeOptions, GetNode, ListEdge } from "../types/shared.js";
+import { GetNode, ListEdge } from "../types/shared.js";
 import { randomUUID } from "crypto";
 import FormData from "form-data";
 import { FacebookUploadError } from "../internal/error.js";
-import { Feed } from "../types/facebookpage.js";
 import { FacebookPost } from "../types/facebookpost.js";
 
 export function createPageResource(http: HttpClient, pageId: string) {
@@ -25,24 +24,9 @@ export function createPageResource(http: HttpClient, pageId: string) {
     videos: createVideoResource(http, pageId),
     reels: createReelResource(http, pageId),
     images: createImageResource(http, pageId),
-    feed: createFeedResource(http, pageId),
     posts: createPostResource(http, pageId),
   };
 }
-
-export type ListFeed = ListEdge<Feed["data"][0], FeedEdgeOptions, 2>;
-
-const createFeedResource = (http: HttpClient, pageId: string) => {
-  const list: ListFeed = async (query) => {
-    return http.get(`/${pageId}/feed`, {
-      params: { fields: toGraphFields(query.fields), ...query.options },
-    });
-  };
-
-  return {
-    list,
-  };
-};
 
 export type ListPosts = ListEdge<FacebookPost>;
 export type GetPost = GetNode<FacebookPost>;
@@ -56,7 +40,6 @@ export const createPostResource = (http: HttpClient, pageId: string) => {
     });
   };
 
-  get("", { comments: { fields: {} } });
   const list: ListPosts = async (query) => {
     return http.get(`/${pageId}/posts`, {
       params: { fields: toGraphFields(query.fields), ...query.options },

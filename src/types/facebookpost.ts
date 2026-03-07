@@ -13,7 +13,9 @@ export interface CommentRaw {
   created_time: string;
   is_hidden: boolean;
   from: UserRaw;
-  comments: CollectionOf<CommentRaw, CommentEdgeOptions>;
+  comments: CollectionOf<CommentRaw, CommentEdgeOptions> & {
+    summary: { total_count: number };
+  };
 }
 export type Comment = KeysToCamel<CommentRaw>;
 

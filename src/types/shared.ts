@@ -1,7 +1,5 @@
 type Decrement = [never, 0, 1, 2, 3, 4, 5];
 
-// ─── Edge Options ───
-
 export interface EdgeOptions {
   limit?: number;
   after?: string;
@@ -29,13 +27,20 @@ export type FbFieldSelector<T, D extends number = 1> = {
         : true;
 };
 
+type CleanCollection<T, Data, F> = { data: Data[]; paging: Paging } & (Exclude<
+  F,
+  undefined
+> extends { options: infer _O }
+  ? Omit<NonNullable<T>, "data" | "paging" | "_edgeOptions">
+  : {});
+
 export type FbPickDeep<T, F> = {
-  [K in keyof T as K extends keyof F ? K : never]: Exclude<F[K & keyof F], undefined> extends true
-    ? T[K]
-    : Exclude<F[K & keyof F], undefined> extends { fields: infer NF }
-      ? NonNullable<T[K]> extends CollectionOf<infer U>
-        ? { data: FbPickDeep<U, NF>[]; paging: Paging }
-        : never
+  [K in keyof T as K extends keyof F ? K : never]: NonNullable<T[K]> extends CollectionOf<infer U>
+    ? Exclude<F[K & keyof F], undefined> extends { fields: infer NF }
+      ? CleanCollection<T[K], FbPickDeep<U, NF>, F[K & keyof F]>
+      : CleanCollection<T[K], U, F[K & keyof F]>
+    : Exclude<F[K & keyof F], undefined> extends true
+      ? T[K]
       : NonNullable<T[K]> extends object
         ? FbPickDeep<NonNullable<T[K]>, Exclude<F[K & keyof F], undefined | true>>
         : T[K];
@@ -49,6 +54,7 @@ export type Collection<T, F, P = Paging> = {
 export type CollectionOf<T, O extends EdgeOptions = EdgeOptions, P = Paging> = {
   data: T[];
   paging: P;
+
   /** @internal type-level only — does not exist at runtime */
   _edgeOptions?: O;
 };
