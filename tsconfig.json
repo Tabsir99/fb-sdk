@@ -1,0 +1,64 @@
+{
+  "compilerOptions": {
+    // Project Options
+    "target": "ES2022", // Modern browsers/Node support ES2022
+    "lib": ["ES2022", "DOM", "DOM.Iterable"], // Include modern JS features + DOM types
+    "module": "NodeNext", // Use Node's native ESM
+    "moduleResolution": "nodenext", // Modern module resolution strategy
+    "rootDir": "./src", // Source files location
+    "outDir": "./dist", // Output directory
+    "sourceMap": true, // Generate sourcemaps for debugging
+    "declaration": false, // Generate .d.ts files
+    "declarationMap": false, // Generate sourcemaps for .d.ts files
+
+    // Strict Checks
+    "strict": true, // Enable all strict type checking options
+    "noImplicitAny": true, // Raise error on expressions with implied 'any' type
+    "strictNullChecks": true, // Enable strict null checks
+    "strictFunctionTypes": true, // Enable strict checking of function types
+    "strictBindCallApply": true, // Enable strict 'bind', 'call', and 'apply' methods
+    "strictPropertyInitialization": true, // Ensure class properties are initialized
+    "noImplicitThis": true, // Raise error on 'this' expressions with implied 'any'
+    "alwaysStrict": true, // Parse in strict mode and emit "use strict"
+
+    // Additional Checks
+    "noUnusedLocals": true, // Report errors on unused locals
+    "noUnusedParameters": true, // Report errors on unused parameters
+    "noImplicitReturns": true, // Report error when not all code paths return
+    "noFallthroughCasesInSwitch": true, // Report errors for fallthrough cases in switch
+    "noUncheckedIndexedAccess": true, // Add undefined to indexed access results
+    "noPropertyAccessFromIndexSignature": true, // Require explicit index signatures
+    "exactOptionalPropertyTypes": true, // Differentiate between undefined and not present
+
+    // Module Resolution
+    // "baseUrl": ".", // Base directory for module resolution
+    "esModuleInterop": true, // Enable CommonJS/AMD/UMD interop
+    // "preserveSymlinks": true, // Don't resolve symlinks to their real path
+    "forceConsistentCasingInFileNames": true, // Ensure consistent casing in imports
+
+    // Advanced
+    "skipLibCheck": true, // Skip type checking of declaration files
+    "isolatedModules": true, // Ensure code can be safely transpiled
+    "preserveConstEnums": true, // Don't erase const enum declarations
+    "resolveJsonModule": true, // Allow importing .json files
+    "allowJs": true, // Allow JavaScript files to be compiled
+    "checkJs": true, // Type check JavaScript files
+    "removeComments": true, // Remove comments in output files
+
+    // Experimental
+    "experimentalDecorators": true, // Enable experimental decorators
+    "emitDecoratorMetadata": true // Emit decorator metadata,
+  },
+
+  "include": [
+    "src/**/*", // Include all files in src directory
+    "global.d.ts"
+  ],
+
+  "exclude": [
+    "node_modules", // Exclude node_modules
+    "**/*.spec.ts", // Exclude test files
+    "dist", // Exclude output directory,
+    "src/temp"
+  ]
+}
