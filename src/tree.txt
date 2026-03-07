@@ -1,0 +1,22 @@
+.
+├── client.ts
+├── httpClient.ts
+├── internal
+│   ├── error.ts
+│   └── poller.ts
+├── lib
+│   └── transformCase.ts
+├── resources
+│   ├── PageResource.ts
+│   ├── PostResource.ts
+│   └── UserResource.ts
+├── tree.txt
+├── types
+│   ├── facebookmedia.ts
+│   ├── facebookpage.ts
+│   ├── facebookpost.ts
+│   ├── facebookuser.ts
+│   └── shared.ts
+└── utils.ts
+
+5 directories, 15 files

@@ -6,12 +6,6 @@ export interface EdgeOptions {
   before?: string;
 }
 
-export interface FeedEdgeOptions extends EdgeOptions {
-  since?: number;
-  until?: number;
-  order?: ORDER;
-}
-
 export interface CommentEdgeOptions extends EdgeOptions {
   filter?: "toplevel" | "stream";
   summary?: boolean;

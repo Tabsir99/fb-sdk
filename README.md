@@ -1,6 +1,6 @@
 # fb-sdk
 
-A type-safe TypeScript SDK for the Facebook Graph API (v25.0), focused on page content management — publishing and listing videos, reels, images, and posts.
+A typed Node.js SDK for the Facebook Graph API (v25.0). Select only the fields you need, get full autocomplete while writing the selector, strict compile-time validation that rejects unknown fields, and a return type narrowed to exactly what you selected — all without runtime overhead.
 
 ## Installation
 
@@ -8,341 +8,344 @@ A type-safe TypeScript SDK for the Facebook Graph API (v25.0), focused on page c
 npm install fb-sdk
 ```
 
+**Requirements:** Node.js 18+, TypeScript 5.9+
+
 **Dependencies:** `axios`, `form-data`
 
 ## Quick Start
 
 ```typescript
-import { fbGraph } from "fb-sdk/dist/client.js";
+import { fbGraph } from "fb-sdk";
 
-const fb = fbGraph("YOUR_ACCESS_TOKEN");
+const fb = fbGraph("your-access-token");
 
-// Get the authenticated user
-const me = await fb.me.get({ id: true, name: true });
+// Get a post — only the fields you select exist on the result
+const post = await fb.posts.get("postId", {
+  id: true,
+  message: true,
+  comments: {
+    options: { filter: "toplevel" },
+    fields: { id: true, message: true },
+  },
+});
 
-// List pages the user manages
-const pages = await fb.me.accounts({ id: true, name: true, accessToken: true });
+post.id; // string
+post.message; // string | undefined
+post.comments.data[0].message; // string
+post.comments.paging; // Paging
+// post.fullPicture             — compile error, not selected
+```
 
-// Work with a specific page
-const page = fb.pages("PAGE_ID");
+## Field Selection
 
-// List recent videos
-const videos = await page.videos.list({ id: true, title: true, createdTime: true });
+Every `get` and `list` method accepts a **field selector** — an object whose shape mirrors the resource type. You pick fields by setting them to `true`. The SDK converts this object into the Graph API `fields` query parameter and infers a return type containing only the selected fields.
 
-// Publish an image
-const { postId } = await page.images.publish({
-  url: "https://example.com/photo.jpg",
-  caption: "Hello from fb-sdk!",
+### Scalar fields
+
+```typescript
+{ id: true, message: true }
+// → fields=id,message
+```
+
+### Nested objects
+
+For non-collection nested objects, nest the selector directly:
+
+```typescript
+{ picture: { data: { url: true, height: true } } }
+// → fields=picture{data{url,height}}
+```
+
+You can also pass `true` to select all fields of a nested object:
+
+```typescript
+{
+  picture: true;
+}
+// → fields=picture
+```
+
+### Edges (collections)
+
+Edges — like `comments` on a post — are paginated collections. They require the `{ fields }` wrapper:
+
+```typescript
+{
+  comments: {
+    fields: { id: true, message: true }
+  }
+}
+// → fields=comments{id,message}
+```
+
+Passing `true` selects all fields on the edge's items:
+
+```typescript
+{
+  comments: true;
+}
+// → fields=comments
+```
+
+### Edge options
+
+Some edges accept extra parameters (limit, pagination cursors, filters). These go in `options`:
+
+```typescript
+{
+  comments: {
+    options: { filter: "toplevel", limit: 10 },
+    fields: { id: true, message: true }
+  }
+}
+// → fields=comments.filter(toplevel).limit(10){id,message}
+```
+
+Available options vary per edge. The `comments` edge supports `filter` and `summary` on top of the base `limit`, `after`, and `before`. The SDK infers the correct options type for each edge — you get autocomplete for what's available.
+
+### Return type narrowing
+
+The return type contains **only** what you selected. If you select `{ id: true, message: true }` on a `FacebookPost`, the result type is `{ id: string; message: string | undefined }` — not the full `FacebookPost`. This applies recursively to nested objects and edges.
+
+When an edge has option-dependent response fields (e.g., `comments` includes a `summary` object), those fields appear in the return type only when `options` is provided in the selector.
+
+## Available Resources
+
+### `fb.posts`
+
+Operations on posts by ID.
+
+#### `fb.posts.get(postId, fields)`
+
+Fetch a single post.
+
+```typescript
+const post = await fb.posts.get("postId", {
+  id: true,
+  statusType: true,
+  createdTime: true,
+  shares: true,
+  reactions: true,
 });
 ```
 
-## Authentication
+#### `fb.posts.expire(postId, time, type)`
 
-The SDK requires a Facebook **access token** passed to `fbGraph()`. It is used as a query parameter (`access_token`) on all Graph API requests.
+Set an expiration on a post.
 
-- **User tokens** — for `/me` endpoints (user profile, listing managed pages).
-- **Page tokens** — for page-scoped operations (publishing content, listing feed). Retrieve page tokens via `fb.me.accounts(...)`.
+```typescript
+await fb.posts.expire("postId", Date.now() + 86400000, "expire_only");
+```
 
-The SDK does not handle token refresh or OAuth flows — you must supply a valid token.
+#### `fb.posts.comments.get(postId, fields)`
 
-## API Reference
+Fetch comments on a post.
 
-### `fbGraph(accessToken: string)`
-
-Entry point. Returns an object with three resource namespaces:
-
-| Property        | Type           | Description                                         |
-| --------------- | -------------- | --------------------------------------------------- |
-| `me`            | `UserResource` | Authenticated user operations                       |
-| `posts`         | `PostResource` | Post operations (get, expire, comments)             |
-| `pages(pageId)` | `PageResource` | Page-scoped resources (videos, reels, images, feed) |
+```typescript
+const comments = await fb.posts.comments.get("postId", {
+  id: true,
+  message: true,
+  from: { name: true },
+});
+// comments.data    — Comment[]
+// comments.paging  — Paging
+```
 
 ---
 
-### `fb.me` — User Resource
+### `fb.me`
 
-#### `me.get(fields)`
+Operations on the authenticated user.
 
-Fetches the authenticated user's profile.
+#### `fb.me.get(fields)`
+
+Fetch the current user's profile.
 
 ```typescript
-const user = await fb.me.get({ id: true, name: true, picture: true });
+const me = await fb.me.get({ id: true, name: true });
 ```
 
-#### `me.accounts(fields)`
+#### `fb.me.accounts(fields)`
 
-Lists Facebook Pages managed by the authenticated user.
+List Facebook Pages the user manages.
 
 ```typescript
 const pages = await fb.me.accounts({
   id: true,
   name: true,
   accessToken: true,
-  picture: { data: { url: true, width: true } },
 });
+// pages.data    — FacebookPage[]
+// pages.paging  — Paging
 ```
-
-Returns `Collection<FacebookPage, F>` with `data` and `paging`.
 
 ---
 
-### `fb.posts` — Post Resource
+### `fb.pages(pageId)`
 
-#### `posts.get(postId, fields)`
-
-Fetches a single post by ID.
+Operations scoped to a specific Page. Returns sub-resources for posts, videos, reels, and images.
 
 ```typescript
-const post = await fb.posts.get("POST_ID", {
+const page = fb.pages("pageId");
+```
+
+#### `page.posts.list(query)` / `page.posts.get(postId, fields)`
+
+List or fetch posts on a Page.
+
+```typescript
+const feed = await page.posts.list({
+  fields: { id: true, message: true, createdTime: true },
+});
+
+const post = await page.posts.get("postId", {
   id: true,
   message: true,
-  createdTime: true,
-  shares: true,
 });
 ```
 
-#### `posts.expire(postId, time, type)`
+#### `page.videos.list(query)` / `page.videos.publish(data)`
 
-Sets an expiration on a post. `time` is a Unix timestamp in **milliseconds** (converted to seconds internally). `type` is either `"expire_only"` or `"expire_and_delete"`.
-
-```typescript
-await fb.posts.expire("POST_ID", Date.now() + 86400000, "expire_and_delete");
-```
-
-#### `posts.comments.get(postId, fields)`
-
-Fetches comments on a post.
+List videos or publish a new video.
 
 ```typescript
-const comments = await fb.posts.comments.get("POST_ID", {
-  id: true,
-  message: true,
-  createdTime: true,
-  from: { name: true },
+const videos = await page.videos.list({
+  fields: { id: true, title: true, status: true },
 });
-```
 
-Returns `Collection<Comment, F>`.
-
----
-
-### `fb.pages(pageId)` — Page Resource
-
-Returns an object with four sub-resources:
-
-#### `page.videos.list(fields, limit?)`
-
-Lists videos on the page. Default limit: `5`.
-
-```typescript
-const videos = await page.videos.list(
-  {
-    id: true,
-    title: true,
-    description: true,
-    views: true,
-    status: true,
-  },
-  10,
-);
-```
-
-#### `page.videos.publish(data)`
-
-Publishes a video. Handles file upload, optional thumbnail, and polls for completion on `504` timeout. Throws `FacebookUploadError` on failure.
-
-```typescript
 const { postId } = await page.videos.publish({
   fileUrl: "https://example.com/video.mp4",
   title: "My Video",
-  description: "Video description",
-  thumbnailUrl: "https://example.com/thumb.jpg", // optional
+  description: "A description",
+  thumbnailUrl: "https://example.com/thumb.jpg",
 });
 ```
 
-#### `page.reels.list(fields, limit?)`
+Publishing handles the upload, waits for processing via polling, and returns the resulting post ID. Throws `FacebookUploadError` on failure.
 
-Lists reels on the page. Default limit: `5`.
+#### `page.reels.list(query)` / `page.reels.get(reelId, fields)` / `page.reels.publish(data)`
 
-#### `page.reels.get(mediaId, fields)`
-
-Fetches a single reel by ID.
-
-#### `page.reels.publish(data)`
-
-Publishes a reel using Facebook's three-phase upload protocol (START → upload file → FINISH). Polls for completion. Throws `FacebookUploadError` on failure.
+List, fetch, or publish reels. Publishing uses Facebook's resumable upload protocol (start session → upload file → finish session) and polls until the reel is processed.
 
 ```typescript
 const { postId } = await page.reels.publish({
   fileUrl: "https://example.com/reel.mp4",
   title: "My Reel",
-  thumbnailUrl: "https://example.com/thumb.jpg", // optional
+  thumbnailUrl: "https://example.com/thumb.jpg",
 });
 ```
 
-#### `page.images.list(fields, limit?)`
+#### `page.images.list(query)` / `page.images.get(imageId, fields)` / `page.images.publish(data)`
 
-Lists photos on the page. Default limit: `5`.
-
-#### `page.images.get(mediaId, fields)`
-
-Fetches a single image by ID.
-
-#### `page.images.publish(data)`
-
-Publishes an image.
+List, fetch, or publish images.
 
 ```typescript
 const { postId } = await page.images.publish({
-  url: "https://example.com/photo.jpg",
-  caption: "My photo",
+  url: "https://example.com/image.jpg",
+  caption: "My image",
 });
 ```
 
-#### `page.feed.list(fields, options?)`
+## Adding New Endpoints
 
-Lists the page's feed posts. Supports time-range filtering and ordering.
+To add a new resource or edge, follow this pattern:
+
+### 1. Define the raw type
+
+Create or update a file in `src/types/`. Define the raw interface with snake_case keys matching the Facebook API response:
 
 ```typescript
-const feed = await page.feed.list(
-  {
-    id: true,
-    message: true,
-    createdTime: true,
-    statusType: true,
-  },
-  {
-    limit: 25, // default: 25
-    order: ORDER.NEWEST, // default: NEWEST
-    since: 1700000000, // optional Unix timestamp
-    until: 1710000000, // optional Unix timestamp
-  },
-);
+// src/types/facebookstory.ts
+import { KeysToCamel } from "../lib/transformCase.js";
+
+interface FacebookStoryRaw {
+  id: string;
+  created_time: string;
+  media_url: string;
+}
+export type FacebookStory = KeysToCamel<FacebookStoryRaw>;
 ```
 
----
+### 2. Define edge options (if needed)
 
-## Type-Safe Field Selection
-
-All `get` and `list` methods use a **field selector** pattern. You pass an object describing the fields you want, and the return type is narrowed to only those fields — no extra properties, full autocomplete.
+If the edge supports custom parameters beyond the base `limit`/`after`/`before`, extend `EdgeOptions` in `src/types/shared.ts`:
 
 ```typescript
-// Only 'id' and 'name' are present in the result type
-const user = await fb.me.get({ id: true, name: true });
-//    ^? { id: string; name: string }
+export interface StoryEdgeOptions extends EdgeOptions {
+  since?: number;
+}
 ```
 
-For nested objects, pass a nested selector:
+### 3. Use `CollectionOf` for edges with option-dependent fields
+
+If the edge's response includes extra fields only when certain options are passed, use `CollectionOf` with an intersection:
 
 ```typescript
-const user = await fb.me.get({
-  id: true,
-  picture: { data: { url: true } },
-});
-//    ^? { id: string; picture: { data: { url: string } } }
-```
-
-This is powered by the `FbFieldSelector<T>` and `FbPickDeep<T, F>` utility types in `src/types/shared.ts`, with configurable recursion depth.
-
----
-
-## Pagination
-
-List endpoints return a `Collection<T, F>` with:
-
-```typescript
-{
-  data: T[];
-  paging: {
-    cursors: { before: string; after: string };
-    next?: string;   // URL for next page, if available
+interface ParentRaw {
+  stories: CollectionOf<FacebookStoryRaw, StoryEdgeOptions> & {
+    extra_field: string; // only present when options are provided
   };
 }
 ```
 
-There is **no built-in auto-pagination or cursor-following helper** currently. You receive the `paging` object and handle cursor-based pagination manually.
+### 4. Create the resource
 
----
+In `src/resources/`, create a factory function using `GetNode` and `ListEdge` types:
 
-## Error Handling
+```typescript
+import { GetNode, ListEdge } from "../types/shared.js";
+import { FacebookStory } from "../types/facebookstory.js";
 
-### `FacebookUploadError`
+export type ListStories = ListEdge<FacebookStory>;
+export type GetStory = GetNode<FacebookStory>;
 
-A custom error class (`src/internal/error.ts`) thrown when media uploads fail. Extends `Error` and includes:
+export const createStoryResource = (http: HttpClient, pageId: string) => {
+  const list: ListStories = async (query) =>
+    http.get(`/${pageId}/stories`, {
+      params: { fields: toGraphFields(query.fields), ...query.options },
+    });
 
-- `message` — stringified Facebook error object
-- `status` — the `FacebookMedia["status"]` object with phase-level error details
+  const get: GetStory = async (id, fields) =>
+    http.get(`/${id}`, {
+      params: { fields: toGraphFields(fields) },
+    });
 
-Thrown by video, reel, and image publish methods.
-
-### HTTP-Level Errors
-
-The SDK does not wrap general HTTP/Axios errors. Non-upload failures propagate as standard Axios errors. The `safe` mode on the HTTP client suppresses Axios throwing on specific status codes (used internally for upload flows).
-
----
-
-## Key Types
-
-| Type                 | File                     | Description                                                     |
-| -------------------- | ------------------------ | --------------------------------------------------------------- |
-| `FacebookUser`       | `types/facebookuser.ts`  | User profile fields                                             |
-| `FacebookPage`       | `types/facebookpage.ts`  | Page fields (id, name, access_token, picture)                   |
-| `FacebookPost`       | `types/facebookpost.ts`  | Post fields (message, shares, reactions, comments, attachments) |
-| `Comment`            | `types/facebookpost.ts`  | Comment with nested replies                                     |
-| `FacebookVideo`      | `types/facebookmedia.ts` | Video fields + status                                           |
-| `FacebookReel`       | `types/facebookmedia.ts` | Reel fields + status                                            |
-| `FacebookImage`      | `types/facebookmedia.ts` | Image fields + status                                           |
-| `PublishVideoParams` | `types/facebookmedia.ts` | Video upload parameters                                         |
-| `PublishReelParams`  | `types/facebookmedia.ts` | Reel upload parameters                                          |
-| `PublishImageParams` | `types/facebookmedia.ts` | Image upload parameters                                         |
-| `Collection<T, F>`   | `types/shared.ts`        | Paginated list response                                         |
-| `FbFieldSelector<T>` | `types/shared.ts`        | Type-safe field selector                                        |
-| `FbPickDeep<T, F>`   | `types/shared.ts`        | Deep pick based on selector                                     |
-| `FacebookApiError`   | `types/shared.ts`        | Error shape from Facebook API                                   |
-| `ORDER`              | `types/shared.ts`        | Enum: `OLDEST`, `NEWEST`                                        |
-
-All types are defined in **camelCase** using the `KeysToCamel` transform applied to raw snake_case interfaces that mirror the Graph API schema.
-
----
-
-## Development
-
-### Scripts
-
-```bash
-npm run build    # Compile TypeScript → dist/
+  return { list, get };
+};
 ```
 
-### Tech Stack
+### 5. Wire into the SDK
 
-- **TypeScript** (strict mode, `ES2022` target, `NodeNext` modules)
-- **axios** — HTTP client
-- **form-data** — multipart uploads
+Add the resource to the appropriate factory in `src/client.ts`:
 
-### Project Structure
-
-```
-src/
-├── client.ts              # Entry point — fbGraph() factory
-├── httpClient.ts          # Axios wrapper with case transforms
-├── utils.ts               # Field selector → Graph API fields string
-├── internal/
-│   ├── error.ts           # FacebookUploadError class
-│   └── poller.ts          # Generic polling + video/reel status pollers
-├── lib/
-│   └── transformCase.ts   # camelCase ↔ snake_case transforms (runtime + types)
-├── resources/
-│   ├── PageResource.ts    # Page sub-resources (videos, reels, images, feed)
-│   ├── PostResource.ts    # Post operations + comments
-│   └── UserResource.ts    # /me endpoints
-└── types/
-    ├── shared.ts          # Collection, Paging, FbFieldSelector, FbPickDeep
-    ├── facebookmedia.ts   # Video, Reel, Image types + publish params
-    ├── facebookpage.ts    # Page + Feed types
-    ├── facebookpost.ts    # Post, Comment, PostExpiration types
-    └── facebookuser.ts    # User type
+```typescript
+export function fbGraph(accessToken: string) {
+  const http = createHttpClient(accessToken);
+  return {
+    posts: createPostResource(http),
+    pages: (pageId: string) => ({
+      ...createPageResource(http, pageId),
+      stories: createStoryResource(http, pageId),
+    }),
+    me: createUserResource(http),
+  };
+}
 ```
 
-### No Tests
+## Type System Overview
 
-There are **no tests** in the codebase currently. Test files are excluded in `tsconfig.json` (`**/*.spec.ts`), suggesting the convention would be co-located `.spec.ts` files when added.
+The SDK's type system follows a three-stage pipeline:
+
+### 1. Selector generation (`FbFieldSelector<T>`)
+
+Given a resource type `T`, `FbFieldSelector<T>` generates the shape of a valid field selector object. Scalar fields become `true | undefined`. Nested objects become recursive selectors or `true`. Collection edges become `{ options?: O; fields: FbFieldSelector<Inner> } | true`, where `O` is the edge-specific options type extracted from the `CollectionOf` phantom type. Recursion depth is bounded by a `Decrement` counter (default depth: 1 level of nesting).
+
+### 2. Strict validation (`DeepStrict<Valid, Inferred>`)
+
+TypeScript's structural type system doesn't reject excess properties when generics are involved. `DeepStrict` solves this by mapping every key in the inferred selector — if the key exists in the valid selector shape, it passes through; otherwise it becomes `never`, causing a compile error. This gives you red squiggles on typos and invalid fields.
+
+### 3. Return type narrowing (`FbPickDeep<T, F>`)
+
+`FbPickDeep<T, F>` walks the resource type `T` in parallel with your selector `F` and keeps only the fields you selected. For collections, it wraps the picked inner type in `{ data: Picked[]; paging: Paging }`. If the selector included `options`, option-dependent fields (defined via `& { ... }` on `CollectionOf`) are also included via `CleanCollection`.
+
+The result is end-to-end type safety: autocomplete guides you to valid fields, the compiler rejects invalid ones, and the return type contains exactly what you asked for.
