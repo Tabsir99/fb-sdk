@@ -25,6 +25,9 @@ export interface HttpClient {
   post<T>(path: string, data: Data, options: RawOptions): Promise<HttpResponse<T>>;
   post<T>(path: string, data: Data, options?: Options): Promise<T>;
 
+  delete<T>(path: string, options: RawOptions): Promise<HttpResponse<T>>;
+  delete<T>(path: string, options?: Options): Promise<T>;
+
   getToken(): string;
 }
 
@@ -48,6 +51,14 @@ export function createHttpClient(accessToken: string): HttpClient {
       const body = toCamel(res.data);
 
       return options?.safe ? { data: body, status: res.status } : body;
+    },
+
+    delete: async (path, options) => {
+      const res = await fbApi.delete(path, {
+        params: { access_token: accessToken, ...options?.params },
+      });
+      const data = toCamel(res.data);
+      return options?.safe ? { data, status: res.status } : data;
     },
 
     getToken: () => accessToken,

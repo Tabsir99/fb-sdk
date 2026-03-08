@@ -7,11 +7,9 @@ import { createCommentResource } from "./resources/CommentResource.js";
 export function fbGraph(accessToken: string) {
   const http = createHttpClient(accessToken);
   return {
-    posts: createPostResource(http),
-    pages: (pageId: string) => ({
-      ...createPageResource(http, pageId),
-      comments: createCommentResource(http, pageId),
-    }),
+    post: (postId: string) => createPostResource(http, postId),
+    page: (pageId: string) => createPageResource(http, pageId),
+    comment: (commentId: string) => createCommentResource(http, commentId),
     me: createUserResource(http),
   };
 }

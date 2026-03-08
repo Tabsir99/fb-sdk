@@ -30,20 +30,10 @@ interface MediaRaw {
   created_time: string;
   length: number;
   views: number;
+  universal_video_id?: string;
 }
 
 export type FacebookMedia = KeysToCamel<MediaRaw>;
-
-interface FacebookVideoRaw extends MediaRaw {
-  universal_video_id?: string;
-}
-export type FacebookVideo = KeysToCamel<FacebookVideoRaw>;
-
-interface FacebookReelRaw extends MediaRaw {}
-export type FacebookReel = KeysToCamel<FacebookReelRaw>;
-
-interface FacebookImageRaw extends MediaRaw {}
-export type FacebookImage = KeysToCamel<FacebookImageRaw>;
 
 export type PublishVideoResponse =
   | { id: string; error?: undefined }

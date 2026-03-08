@@ -1,21 +1,20 @@
 import type { HttpClient } from "../httpClient.js";
-import type { Comment, FacebookPost, PostExpiration } from "../types/facebookpost.js";
-import { CommentEdgeOptions, FbFieldSelector, FbPickDeep, GetEdge } from "../types/shared.js";
+import type { FacebookPost, PostExpiration } from "../types/facebookpost.js";
+import { GetNode } from "../types/shared.js";
 import { toGraphFields } from "../internal/utils.js";
+import { FacebookMedia } from "../types/facebookmedia.js";
+import { createCommenstResource } from "./CommentResource.js";
 
-export type Expire = (postId: string, time: number, type: PostExpiration["type"]) => Promise<void>;
-export type GetPost = <F extends FbFieldSelector<FacebookPost>>(
-  postId: string,
-  fields: F,
-) => Promise<FbPickDeep<FacebookPost, F>>;
+export type Expire = (time: number, type: PostExpiration["type"]) => Promise<void>;
+export type GetPost = GetNode<FacebookPost>;
 
-export function createPostResource(http: HttpClient) {
-  const expire: Expire = async (postId, time, type) =>
+export function createPostResource(http: HttpClient, postId: string) {
+  const expire: Expire = async (time, type) =>
     http.post(`/${postId}`, {
       expiration: { type, time: Math.ceil(time / 1000) } satisfies PostExpiration,
     });
 
-  const get: GetPost = async (postId, fields) =>
+  const get: GetPost = async (fields) =>
     http.get(`/${postId}`, {
       params: {
         fields: toGraphFields(fields),
@@ -25,21 +24,16 @@ export function createPostResource(http: HttpClient) {
   return {
     expire,
     get,
-    comments: createCommentResource(http),
+    comments: createCommenstResource(http, postId),
   };
 }
 
-export type GetComments = GetEdge<Comment, CommentEdgeOptions>;
-
-export const createCommentResource = (http: HttpClient) => {
-  const get: GetComments = async (postId, fields) =>
-    http.get(`/${postId}/comments`, {
-      params: {
-        fields: toGraphFields(fields),
-      },
-    });
-
-  return {
-    get,
+export type GetMedia = GetNode<FacebookMedia>;
+export function createMediaResource(http: HttpClient, mediaId: string) {
+  const get: GetMedia = (fields) => {
+    return http.get(`/${mediaId}`, { params: toGraphFields(fields) });
   };
-};
+
+  return { get };
+}
+export type CreateMediaResource = typeof createMediaResource;

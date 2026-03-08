@@ -94,7 +94,6 @@ export type GetEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 1
 ) => Promise<Collection<T, F>>;
 
 export type GetNode<T, D extends number = 1> = <F extends FbFieldSelector<T, D>>(
-  id: string,
   fields: F extends DeepStrict<FbFieldSelector<T, D>, F> ? F : DeepStrict<FbFieldSelector<T, D>, F>,
 ) => Promise<FbPickDeep<T, F>>;
 

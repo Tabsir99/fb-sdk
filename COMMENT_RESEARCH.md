@@ -201,3 +201,68 @@ The original design is sound with one adjustment:
 
 - **Comments edge does NOT support `since`/`until`**: The SDK should NOT pass these to the comments endpoint. For on-demand mode, we fetch comments per post using cursor-based pagination and filter client-side by `created_time`. For webhook mode, the store already knows which posts have recent activity, so we fetch all recent comments from those specific posts.
 - **`order` is NOT a query param on comments**: It's only a response field in `summary`. Comments come back chronologically by default. We sort merged results ourselves.
+
+## Write Operations
+
+### 1. Create Comment / Reply
+- **Endpoint**: `POST /{object-id}/comments` (object-id can be a Post, Video, Photo, or parent Comment)
+- **Parameters**: 
+  - `message` (string): Text of the comment
+  - `attachment_id` (string): ID of an unpublished photo
+  - `attachment_share_url` (string): URL of a GIF
+  - `attachment_url` (string): URL of an image
+  - `source` (multipart/form-data): Photo encoded as form data
+- **Note**: One of `attachment_id`, `attachment_share_url`, `attachment_url`, `message`, or `source` MUST be provided. To @mention a Page, use `@[page-id]`.
+- **Response Shape**: `{ "id": "{comment-id}" }` (Supports read-after-write)
+- **Permissions**: `pages_manage_engagement` and `MODERATE` task
+
+### 2. Update Comment
+- **Endpoint**: `POST /{comment-id}`
+- **Parameters**:
+  - `message` (string): The text in the new comment message
+  - `attachment_id` (string): ID for a photo attachment
+  - `attachment_share_url` (string): Link to set attachment
+  - `attachment_url` (string): Link to set attachment
+  - `is_hidden` (boolean): Is this comment hidden? (Only applicable to Page comments)
+- **Response Shape**: `{ "success": boolean }` (Read-after-write returns `success=true`)
+
+### 3. Delete Comment
+- **Endpoint**: `DELETE /{comment-id}`
+- **Parameters**: None
+- **Response Shape**: `{ "success": boolean }`
+
+### 4. Like Comment
+- **Endpoint**: `POST /{comment-id}/likes`
+- **Parameters**: None
+- **Response Shape**: `{ "success": true }`
+- **Permissions**: `pages_manage_engagement` and `CREATE_CONTENT` task
+
+### 5. Unlike Comment
+- **Endpoint**: `DELETE /{comment-id}/likes`
+- **Parameters**: None
+- **Response Shape**: `{ "success": true }`
+
+## 7. Verifying `CommentRaw` Type
+
+Cross-referencing `src/types/facebookpost.ts` against the Graph API Reference:
+
+**Fields already correctly present**:
+- `id`, `message`, `created_time`, `is_hidden`, `from`, `like_count`, `comment_count`, `attachment`, `parent`, `permalink_url`, `comments`
+
+**Fields missing from `CommentRaw` that should be added**:
+- `admin_creator`: `{ id: string, name: string }`
+- `application`: `{ id: string, name: string }` (if we want to map Application node)
+- `can_comment`: `boolean`
+- `can_hide`: `boolean`
+- `can_like`: `boolean`
+- `can_remove`: `boolean`
+- `can_reply_privately`: `boolean`
+- `is_private`: `boolean`
+- `user_likes`: `boolean`
+- `message_tags`: `CollectionOf<{id: string, name: string}>` (technically `EntityAtTextRange`, simplified)
+- `object`: `{ id: string }`
+
+**Fields to keep / note**:
+- `is_hidden` is correctly boolean.
+- `attachment` structure is slightly complex (`StoryAttachment`), the existing `CommentAttachmentRaw` interface handles the most common media/url details.
+

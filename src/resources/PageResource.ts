@@ -1,14 +1,12 @@
 import { api, HttpClient } from "../httpClient.js";
 import {
-  FacebookVideo,
-  FacebookReel,
   PublishReelParams,
   PublishReelResponse,
   PublishVideoParams,
   PublishVideoResponse,
-  FacebookImage,
   PublishImageParams,
   PublishImageResponse,
+  FacebookMedia,
 } from "../types/facebookmedia.js";
 import { toGraphFields } from "../internal/utils.js";
 import { toSnakeFormData } from "../lib/transformCase.js";
@@ -18,28 +16,23 @@ import { randomUUID } from "crypto";
 import FormData from "form-data";
 import { FacebookUploadError } from "../internal/error.js";
 import { FacebookPost } from "../types/facebookpost.js";
+import { createMediaResource } from "./PostResource.js";
+import { createPageCommentsResource } from "./comment/PageCommentResouorce.js";
 
 export function createPageResource(http: HttpClient, pageId: string) {
   return {
-    videos: createVideoResource(http, pageId),
-    reels: createReelResource(http, pageId),
-    images: createImageResource(http, pageId),
-    posts: createPostResource(http, pageId),
+    videos: createVideosResource(http, pageId),
+    reels: createReelsResource(http, pageId),
+    images: createImagesResource(http, pageId),
+    posts: createPostsResource(http, pageId),
+    comments: createPageCommentsResource(http, pageId),
   };
 }
 
 export type ListPosts = ListEdge<FacebookPost>;
 export type GetPost = GetNode<FacebookPost>;
 
-export const createPostResource = (http: HttpClient, pageId: string) => {
-  const get: GetPost = async (postId, fields) => {
-    return await http.get(`/${postId}`, {
-      params: {
-        fields: toGraphFields(fields),
-      },
-    });
-  };
-
+export const createPostsResource = (http: HttpClient, pageId: string) => {
   const list: ListPosts = async (query) => {
     if (query.options?.limit) query.options.limit = Math.min(query.options.limit, 100);
     return http.get(`/${pageId}/posts`, {
@@ -49,15 +42,14 @@ export const createPostResource = (http: HttpClient, pageId: string) => {
 
   return {
     list,
-    get,
   };
 };
 
 export type PublishVideo = (data: PublishVideoParams) => Promise<{ postId: string }>;
-export type ListVideos = ListEdge<FacebookVideo>;
+export type ListMedia = ListEdge<FacebookMedia>;
 
-export function createVideoResource(http: HttpClient, pageId: string) {
-  const list: ListVideos = async (fields, limit = 5) => {
+export function createVideosResource(http: HttpClient, pageId: string) {
+  const list: ListMedia = async (fields, limit = 5) => {
     return http.get(`/${pageId}/videos`, {
       params: {
         fields: toGraphFields(fields),
@@ -101,23 +93,13 @@ export type StartUploadSession = () => Promise<{
 export type UploadFile = (uploadUrl: string, fileUrl: string) => Promise<void>;
 export type FinishUploadSession = (form: FormData) => Promise<PublishReelResponse>;
 export type PublishReel = (data: PublishReelParams) => Promise<{ postId: string }>;
-export type GetReel = GetNode<FacebookReel>;
-export type ListReels = ListEdge<FacebookReel>;
 
-export function createReelResource(http: HttpClient, pageId: string) {
-  const list: ListReels = async (fields, limit = 5) => {
+export function createReelsResource(http: HttpClient, pageId: string) {
+  const list: ListMedia = async (fields, limit = 5) => {
     return await http.get(`/${pageId}/video_reels`, {
       params: {
         fields: toGraphFields(fields),
         limit,
-      },
-    });
-  };
-
-  const get: GetReel = async (mediaId, fields) => {
-    return await http.get(`/${mediaId}`, {
-      params: {
-        fields: toGraphFields(fields),
       },
     });
   };
@@ -161,38 +143,18 @@ export function createReelResource(http: HttpClient, pageId: string) {
     const { error } = await finishUploadSession(form);
     if (error) throw new FacebookUploadError(JSON.stringify(error));
 
-    return pollReelStatus(get, videoId);
+    return pollReelStatus(createMediaResource(http, videoId).get);
   };
 
   return {
     publish,
     list,
-    get,
   };
 }
 
 export type PublishImage = (data: PublishImageParams) => Promise<{ postId: string }>;
-export type ListImages = ListEdge<FacebookImage>;
-export type GetImage = GetNode<FacebookImage>;
 
-export function createImageResource(http: HttpClient, pageId: string) {
-  const list: ListImages = async (fields, limit = 5) => {
-    return await http.get(`/${pageId}/photos`, {
-      params: {
-        fields: toGraphFields(fields),
-        limit,
-      },
-    });
-  };
-
-  const get: GetImage = async (mediaId, fields) => {
-    return await http.get(`/${mediaId}`, {
-      params: {
-        fields: toGraphFields(fields),
-      },
-    });
-  };
-
+export function createImagesResource(http: HttpClient, pageId: string) {
   const publish: PublishImage = async (data) => {
     const form = toSnakeFormData({ ...data, published: true });
     const { postId } = await http.post<PublishImageResponse>(`/${pageId}/photos`, form);
@@ -201,7 +163,5 @@ export function createImageResource(http: HttpClient, pageId: string) {
 
   return {
     publish,
-    list,
-    get,
   };
 }

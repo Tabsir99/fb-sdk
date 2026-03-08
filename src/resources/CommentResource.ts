@@ -1,12 +1,17 @@
-import type { HttpClient } from "../httpClient.js";
-import type { Comment } from "../types/facebookpost.js";
+import { api, type HttpClient } from "../httpClient.js";
+import type { Comment, CreateCommentParams, CreateCommentResponse } from "../types/facebookpost.js";
 import type { CommentEdgeOptions, ListEdge } from "../types/shared.js";
-import { ORDER } from "../types/shared.js";
 import type { CommentStore } from "../store/types.js";
 import { toGraphFields } from "../internal/utils.js";
-import { createPageResource } from "./PageResource.js";
-import { toCamel } from "../lib/transformCase.js";
-import { fetchComments } from "../internal/fetchers.js";
+import { toSnakeFormData } from "../lib/transformCase.js";
+import {
+  UpdateCommentParams,
+  UpdateCommentResponse,
+  DeleteCommentResponse,
+  LikeCommentResponse,
+} from "../types/facebookpost.js";
+import { GetNode } from "../types/shared.js";
+import { FacebookUploadError } from "../internal/error.js";
 
 export interface PageCommentConfig {
   /** Webhook store for targeted fetching of recently-active posts. */
@@ -15,113 +20,99 @@ export interface PageCommentConfig {
   postsLimit?: number;
 }
 
-// ─── Cursor Encoding ───
+// ─── Single Comment Operations ───
 
-interface AggregationCursor {
-  postIds: string[];
-  cursors: Record<string, string>;
-  since?: number | undefined;
-  until?: number | undefined;
-  remaining: string[];
-}
+export type GetComment = GetNode<Comment>;
 
-function encodeCursor(cursor: AggregationCursor): string {
-  return Buffer.from(JSON.stringify(cursor)).toString("base64url");
-}
+export type UpdateComment = (data: UpdateCommentParams) => Promise<UpdateCommentResponse>;
 
-function decodeCursor(encoded: string): AggregationCursor {
-  return JSON.parse(Buffer.from(encoded, "base64url").toString("utf-8")) as AggregationCursor;
-}
+export type DeleteComment = () => Promise<DeleteCommentResponse>;
+export type LikeComment = () => Promise<LikeCommentResponse>;
+export type UnlikeComment = () => Promise<LikeCommentResponse>;
 
-// ─── Resource Factory ───
-
-export type GetPageComments = ListEdge<Comment, CommentEdgeOptions, 1, PageCommentConfig>;
-
-export function createCommentResource(http: HttpClient, pageId: string) {
-  const pages = createPageResource(http, pageId);
-  /**
-   * Aggregated page-level comments from multiple posts.
-   *
-   * On-demand mode (no store): fetches recent posts from feed, then comments from each.
-   * Webhook-assisted mode (store provided): fetches comments only from posts with known activity.
-   */
-  const list: GetPageComments = async (query, config = {}) => {
-    const { store, postsLimit = 50 } = config;
-    const { since, until, after, limit = 300 } = query.options ?? {};
-
-    let postIds: string[];
-    let cursors: Record<string, string> = {};
-
-    // Resume from cursor if provided
-    if (after) {
-      const decoded = decodeCursor(after);
-      postIds = decoded.remaining.length > 0 ? decoded.remaining : decoded.postIds;
-      cursors = decoded.cursors;
-    } else if (store && since) {
-      postIds = await store.getActivePosts(pageId, since);
-    } else {
-      const posts = await pages.posts.list({
-        fields: { id: true },
-        options: {
-          limit: postsLimit,
-          ...(until && { until }),
-          order: ORDER.NEWEST,
-        },
-      });
-      postIds = posts.data.map((p) => p.id);
-    }
-
-    if (postIds.length === 0) {
-      return {
-        data: [],
-        paging: { cursors: { before: "", after: "" } },
-      };
-    }
-
-    // Build the fields string for comments, excluding page-level options
-    query.fields.createdTime = true;
-    const fieldsStr = toGraphFields(query.fields);
-
-    // Fetch comments from all posts using batch requests
-    const result = await fetchComments(http, {
-      postIds,
-      fieldsStr,
-      options: query.options,
-      cursors,
+export function createCommentResource(http: HttpClient, commentId: string) {
+  const get: GetComment = async (fields) =>
+    http.get(`/${commentId}`, {
+      params: { fields: toGraphFields(fields) },
     });
 
-    const sliced = result.comments.slice(0, limit);
-    const hasMore = result.comments.length > limit || result.remaining.length > 0;
-
-    const afterCursor = hasMore
-      ? encodeCursor({
-          postIds,
-          cursors: result.nextCursors,
-          since,
-          until,
-          remaining: result.remaining,
-        })
-      : "";
-
-    // Strip _postId and transform via http response pipeline
-    // The http client already applies toCamel on GET responses,
-    // but batch responses come as raw strings — we need to transform
-
-    const camelData = sliced.map((c) => {
-      const { _postId, ...rest } = c;
-      return toCamel(rest);
-    });
-
-    return {
-      data: camelData as any,
-      paging: {
-        cursors: {
-          before: "",
-          after: afterCursor,
-        },
-      },
-    };
+  const update: UpdateComment = async (data) => {
+    return http.post<UpdateCommentResponse>(`/${commentId}`, data);
   };
 
-  return { list };
+  const remove: DeleteComment = async () => {
+    return http.delete<DeleteCommentResponse>(`/${commentId}`);
+  };
+
+  const like: LikeComment = async () => {
+    return http.post<LikeCommentResponse>(`/${commentId}/likes`, null);
+  };
+
+  const unlike: UnlikeComment = async () => {
+    return http.delete<LikeCommentResponse>(`/${commentId}/likes`);
+  };
+
+  const { create: reply, list: replies } = createCommenstResource(http, commentId);
+
+  return {
+    get,
+    update,
+    delete: remove,
+    like,
+    unlike,
+    reply,
+    replies,
+  };
 }
+
+export type GetComments = ListEdge<Comment, CommentEdgeOptions>;
+export type CreateComment = (data: CreateCommentParams) => Promise<CreateCommentResponse>;
+
+/**
+ * ObjectId can be a post or comment Id
+ */
+export const createCommenstResource = (http: HttpClient, objectId: string) => {
+  const list: GetComments = async (fields) =>
+    http.get(`/${objectId}/comments`, {
+      params: {
+        fields: toGraphFields(fields),
+      },
+    });
+
+  const create: CreateComment = async (data) => {
+    const { sourceUrl, ...apiFields } = data;
+
+    if (sourceUrl) {
+      const form = toSnakeFormData(apiFields);
+      const source = await api.get(sourceUrl, { responseType: "stream" });
+      form.append("source", source.data);
+
+      const res = await http.post<CreateCommentResponse>(`/${objectId}/comments`, form, {
+        safe: true,
+      });
+
+      // Similar to page publish operations, if there's an error shape we throw it
+      if ((res.data as any).error) {
+        throw new FacebookUploadError(JSON.stringify((res.data as any).error));
+      }
+
+      return res.data;
+    }
+
+    // No file upload, standard JSON POST
+    const res = await http.post<CreateCommentResponse>(`/${objectId}/comments`, apiFields, {
+      safe: true,
+    });
+
+    if ((res.data as any).error) {
+      throw new FacebookUploadError(JSON.stringify((res.data as any).error));
+    }
+
+    return res.data;
+  };
+
+  return {
+    list,
+    create,
+  };
+};

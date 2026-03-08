@@ -1,4 +1,5 @@
-import { GetReel, ListVideos } from "../resources/PageResource.js";
+import { ListMedia } from "../resources/PageResource.js";
+import { GetMedia } from "../resources/PostResource.js";
 import { FacebookMedia } from "../types/facebookmedia.js";
 import { FacebookUploadError } from "./error.js";
 
@@ -43,7 +44,7 @@ export function poll<TArgs extends unknown[], TResult>(
 }
 
 export const pollVideoStatus = poll(
-  async (listVideos: ListVideos, trackingId: string) => {
+  async (listVideos: ListMedia, trackingId: string) => {
     const videos = await listVideos({
       fields: {
         status: true,
@@ -66,8 +67,8 @@ export const pollVideoStatus = poll(
 );
 
 export const pollReelStatus = poll(
-  async (getReel: GetReel, mediaId: string) => {
-    const { postId, status } = await getReel(mediaId, { postId: true, status: true });
+  async (getReel: GetMedia) => {
+    const { postId, status } = await getReel({ postId: true, status: true });
     const error = getProcessingError(status);
     if (error) throw new FacebookUploadError(error, status);
     if (postId) return { postId };
