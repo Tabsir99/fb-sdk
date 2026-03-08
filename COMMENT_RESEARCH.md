@@ -6,18 +6,15 @@ Research conducted 2026-03-08 from official Facebook Graph API v25.0 documentati
 
 ### Supported Parameters
 
-| Parameter | Type | Description | Source |
-|-----------|------|-------------|--------|
-| `limit` | int | Max objects returned (cursor-based pagination) | [Paginated Results](https://developers.facebook.com/docs/graph-api/results) |
-| `after` | string | Cursor pointing to end of page | [Paginated Results](https://developers.facebook.com/docs/graph-api/results) |
-| `before` | string | Cursor pointing to start of page | [Paginated Results](https://developers.facebook.com/docs/graph-api/results) |
-| `filter` | `"toplevel"` \| `"stream"` | `toplevel` (default): top-level comments in chronological order. `stream`: all-level comments in chronological order (useful for moderation). | [Object Comments](https://developers.facebook.com/docs/graph-api/reference/object/comments/) |
-| `summary` | boolean | When `true`, returns `order` and `total_count` metadata | [Object Comments](https://developers.facebook.com/docs/graph-api/reference/object/comments/) |
+| Parameter | Type                       | Description                                                                                                                                   | Source                                                                                       |
+| --------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `limit`   | int                        | Max objects returned (cursor-based pagination)                                                                                                | [Paginated Results](https://developers.facebook.com/docs/graph-api/results)                  |
+| `after`   | string                     | Cursor pointing to end of page                                                                                                                | [Paginated Results](https://developers.facebook.com/docs/graph-api/results)                  |
+| `before`  | string                     | Cursor pointing to start of page                                                                                                              | [Paginated Results](https://developers.facebook.com/docs/graph-api/results)                  |
+| `filter`  | `"toplevel"` \| `"stream"` | `toplevel` (default): top-level comments in chronological order. `stream`: all-level comments in chronological order (useful for moderation). | [Object Comments](https://developers.facebook.com/docs/graph-api/reference/object/comments/) |
+| `summary` | boolean                    | When `true`, returns `order` and `total_count` metadata                                                                                       | [Object Comments](https://developers.facebook.com/docs/graph-api/reference/object/comments/) |
 
-### Parameters NOT supported on comments edge
-
-- **`since` / `until`** — These are time-based pagination params for edges like `/{page-id}/feed`. The comments edge uses **cursor-based pagination only**. There is no documented support for time-filtering comments directly.
-- **`order`** — Not a request parameter. It's a response field inside `summary` that indicates return order. Comments default to chronological order; no documented way to request reverse_chronological for comments via a param.
+since and until is supported as well
 
 ### `filter=toplevel` vs `filter=stream`
 
@@ -33,27 +30,27 @@ Yes, comment replies are available via `/{comment-id}/comments`. Same edge struc
 
 ### Comment Fields (from `/{comment-id}` node)
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Comment ID |
-| `message` | string | Comment text (default) |
-| `created_time` | datetime | When comment was made (default) |
-| `from` | object | Profile that made the comment (default) — `{id, name}` |
-| `is_hidden` | boolean | Hidden from everyone except author |
-| `attachment` | StoryAttachment | Link or photo attached to comment |
-| `comment_count` | int | Number of replies |
-| `like_count` | int | Number of likes |
-| `parent` | Comment | For replies, the parent comment |
-| `permalink_url` | string | Permanent URL to comment |
-| `can_comment` | boolean | Whether viewer can reply |
-| `can_hide` | boolean | Whether viewer can hide this comment |
-| `can_like` | boolean | Whether viewer can like |
-| `can_remove` | boolean | Whether viewer can remove |
-| `is_private` | boolean | Whether it's a private comment |
-| `user_likes` | boolean | Whether viewer liked this |
-| `message_tags` | list | Profiles tagged in message |
-| `admin_creator` | User | Page admin who wrote it (page access token required) |
-| `can_reply_privately` | boolean | Whether page can send private reply |
+| Field                 | Type            | Description                                            |
+| --------------------- | --------------- | ------------------------------------------------------ |
+| `id`                  | string          | Comment ID                                             |
+| `message`             | string          | Comment text (default)                                 |
+| `created_time`        | datetime        | When comment was made (default)                        |
+| `from`                | object          | Profile that made the comment (default) — `{id, name}` |
+| `is_hidden`           | boolean         | Hidden from everyone except author                     |
+| `attachment`          | StoryAttachment | Link or photo attached to comment                      |
+| `comment_count`       | int             | Number of replies                                      |
+| `like_count`          | int             | Number of likes                                        |
+| `parent`              | Comment         | For replies, the parent comment                        |
+| `permalink_url`       | string          | Permanent URL to comment                               |
+| `can_comment`         | boolean         | Whether viewer can reply                               |
+| `can_hide`            | boolean         | Whether viewer can hide this comment                   |
+| `can_like`            | boolean         | Whether viewer can like                                |
+| `can_remove`          | boolean         | Whether viewer can remove                              |
+| `is_private`          | boolean         | Whether it's a private comment                         |
+| `user_likes`          | boolean         | Whether viewer liked this                              |
+| `message_tags`        | list            | Profiles tagged in message                             |
+| `admin_creator`       | User            | Page admin who wrote it (page access token required)   |
+| `can_reply_privately` | boolean         | Whether page can send private reply                    |
 
 ## 2. Page Feed and Recent Activity
 
@@ -77,6 +74,7 @@ Yes, comment replies are available via `/{comment-id}/comments`. Same edge struc
 ### Is there an endpoint for recently-commented posts?
 
 **No.** There is no Graph API endpoint that surfaces posts sorted by "most recently commented." The feed returns posts by creation time. The only way to discover which posts had recent comment activity is:
+
 1. **Webhooks** — Subscribe to the `feed` field on the Page object. You receive notifications for comments as they happen, including `post_id`.
 2. **Polling** — Fetch feed posts and check each one's comments. There is no shortcut.
 
@@ -120,17 +118,17 @@ When a comment is added to a Page post, the webhook payload looks like:
 
 ### Key `value` Fields
 
-| Field | Description |
-|-------|-------------|
-| `item` | Type of feed change — `"comment"` for comment events, `"post"` for posts |
-| `verb` | Action — `"add"`, `"edited"`, `"remove"` |
-| `post_id` | The post the comment was made on |
-| `comment_id` | The comment's ID |
-| `parent_id` | Parent object — post ID for top-level comments, parent comment ID for replies |
-| `created_time` | Unix timestamp of the comment creation |
-| `from` | `{id, name}` of the commenter |
-| `message` | The comment text |
-| `is_hidden` | Whether the comment is hidden |
+| Field          | Description                                                                   |
+| -------------- | ----------------------------------------------------------------------------- |
+| `item`         | Type of feed change — `"comment"` for comment events, `"post"` for posts      |
+| `verb`         | Action — `"add"`, `"edited"`, `"remove"`                                      |
+| `post_id`      | The post the comment was made on                                              |
+| `comment_id`   | The comment's ID                                                              |
+| `parent_id`    | Parent object — post ID for top-level comments, parent comment ID for replies |
+| `created_time` | Unix timestamp of the comment creation                                        |
+| `from`         | `{id, name}` of the commenter                                                 |
+| `message`      | The comment text                                                              |
+| `is_hidden`    | Whether the comment is hidden                                                 |
 
 ### Signature Verification
 
@@ -139,6 +137,7 @@ Facebook sends an `X-Hub-Signature-256` header with every webhook POST. Format: 
 ### Verification Challenge (GET)
 
 Facebook verifies the webhook endpoint via a GET request with:
+
 - `hub.mode` = `"subscribe"`
 - `hub.verify_token` = the token you configured
 - `hub.challenge` = a random string to echo back
@@ -199,5 +198,6 @@ Calls within 24 hours = 4800 × Number of Engaged Users
 ### Design Impact
 
 The original design is sound with one adjustment:
+
 - **Comments edge does NOT support `since`/`until`**: The SDK should NOT pass these to the comments endpoint. For on-demand mode, we fetch comments per post using cursor-based pagination and filter client-side by `created_time`. For webhook mode, the store already knows which posts have recent activity, so we fetch all recent comments from those specific posts.
 - **`order` is NOT a query param on comments**: It's only a response field in `summary`. Comments come back chronologically by default. We sort merged results ourselves.

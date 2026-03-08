@@ -1,5 +1,5 @@
 import { HttpClient } from "../httpClient.js";
-import { toGraphFields } from "../utils.js";
+import { toGraphFields } from "../internal/utils.js";
 import { FacebookUser } from "../types/facebookuser.js";
 import { FacebookPage } from "../types/facebookpage.js";
 import { Collection, FbFieldSelector, FbPickDeep } from "../types/shared.js";

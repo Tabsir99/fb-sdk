@@ -147,3 +147,13 @@ export interface RevenueValue extends InsightValue {
 export interface RevenueRaw extends InsightRaw {
   values: RevenueValue[];
 }
+
+export interface BatchSubRequest {
+  method: string;
+  relative_url: string;
+}
+
+export interface BatchSubResponse {
+  code: number;
+  body: string;
+}

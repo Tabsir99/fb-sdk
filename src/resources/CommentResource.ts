@@ -1,10 +1,12 @@
 import type { HttpClient } from "../httpClient.js";
-import type { Comment, CommentRaw } from "../types/facebookpost.js";
-import { ORDER, type CommentEdgeOptions, type ListEdge, type Paging } from "../types/shared.js";
+import type { Comment } from "../types/facebookpost.js";
+import type { CommentEdgeOptions, ListEdge } from "../types/shared.js";
+import { ORDER } from "../types/shared.js";
 import type { CommentStore } from "../store/types.js";
-import { toGraphFields } from "../utils.js";
+import { toGraphFields } from "../internal/utils.js";
 import { createPageResource } from "./PageResource.js";
 import { toCamel } from "../lib/transformCase.js";
+import { fetchComments } from "../internal/fetchers.js";
 
 export interface PageCommentConfig {
   /** Webhook store for targeted fetching of recently-active posts. */
@@ -31,94 +33,6 @@ function decodeCursor(encoded: string): AggregationCursor {
   return JSON.parse(Buffer.from(encoded, "base64url").toString("utf-8")) as AggregationCursor;
 }
 
-// ─── Batch Fetching ───
-
-interface BatchSubRequest {
-  method: string;
-  relative_url: string;
-}
-
-interface BatchSubResponse {
-  code: number;
-  body: string;
-}
-
-type FetchComments = (
-  http: HttpClient,
-  params: {
-    postIds: string[];
-    fieldsStr: string;
-    options: CommentEdgeOptions | undefined;
-    cursors: Record<string, string>;
-  },
-) => Promise<{
-  comments: (CommentRaw & { _postId: string })[];
-  nextCursors: Record<string, string>;
-  remaining: string[];
-}>;
-
-const fetchComments: FetchComments = async (http, { postIds, fieldsStr, options, cursors }) => {
-  const allComments: (CommentRaw & { _postId: string })[] = [];
-  const nextCursors: Record<string, string> = {};
-  const remaining: string[] = [];
-
-  // Build batch sub-requests (max 50 per batch)
-  const chunks: string[][] = [];
-  for (let i = 0; i < postIds.length; i += 50) {
-    chunks.push(postIds.slice(i, i + 50));
-  }
-
-  for (const chunk of chunks) {
-    const batch: BatchSubRequest[] = chunk.map((postId) => {
-      const params = new URLSearchParams();
-      params.set("fields", fieldsStr);
-
-      if (options?.filter) params.set("filter", options.filter);
-      if (options?.summary !== undefined) params.set("summary", String(options.summary));
-      if (options?.since) params.set("since", String(options.since));
-      if (options?.until) params.set("until", String(options.until));
-      if (options?.order) params.set("order", options.order);
-
-      const cursor = cursors[postId];
-      if (cursor) params.set("after", cursor);
-
-      return {
-        method: "GET",
-        relative_url: `${postId}/comments?${params.toString()}`,
-      };
-    });
-
-    const responses = await http.post<BatchSubResponse[]>("", {
-      batch: JSON.stringify(batch),
-      include_headers: "false",
-    });
-
-    const responseArray = Array.isArray(responses) ? responses : [];
-
-    for (let i = 0; i < responseArray.length; i++) {
-      const resp = responseArray[i];
-      const postId = chunk[i]!;
-      if (!resp || resp.code !== 200) continue;
-
-      const parsed = JSON.parse(resp.body) as {
-        data: CommentRaw[];
-        paging?: Paging;
-      };
-
-      for (const comment of parsed.data) {
-        allComments.push({ ...comment, _postId: postId });
-      }
-
-      if (parsed.paging?.next && parsed.paging.cursors?.after) {
-        nextCursors[postId] = parsed.paging.cursors.after;
-        remaining.push(postId);
-      }
-    }
-  }
-
-  return { comments: allComments, nextCursors, remaining };
-};
-
 // ─── Resource Factory ───
 
 export type GetPageComments = ListEdge<Comment, CommentEdgeOptions, 1, PageCommentConfig>;
@@ -131,7 +45,7 @@ export function createCommentResource(http: HttpClient, pageId: string) {
    * On-demand mode (no store): fetches recent posts from feed, then comments from each.
    * Webhook-assisted mode (store provided): fetches comments only from posts with known activity.
    */
-  const get: GetPageComments = async (query, config = {}) => {
+  const list: GetPageComments = async (query, config = {}) => {
     const { store, postsLimit = 50 } = config;
     const { since, until, after, limit = 300 } = query.options ?? {};
 
@@ -150,7 +64,6 @@ export function createCommentResource(http: HttpClient, pageId: string) {
         fields: { id: true },
         options: {
           limit: postsLimit,
-          ...(since && { since }),
           ...(until && { until }),
           order: ORDER.NEWEST,
         },
@@ -196,7 +109,6 @@ export function createCommentResource(http: HttpClient, pageId: string) {
 
     const camelData = sliced.map((c) => {
       const { _postId, ...rest } = c;
-      void _postId;
       return toCamel(rest);
     });
 
@@ -211,5 +123,5 @@ export function createCommentResource(http: HttpClient, pageId: string) {
     };
   };
 
-  return { get };
+  return { list };
 }

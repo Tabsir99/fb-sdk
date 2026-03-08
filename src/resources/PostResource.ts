@@ -1,7 +1,7 @@
 import type { HttpClient } from "../httpClient.js";
 import type { Comment, FacebookPost, PostExpiration } from "../types/facebookpost.js";
 import { CommentEdgeOptions, FbFieldSelector, FbPickDeep, GetEdge } from "../types/shared.js";
-import { toGraphFields } from "../utils.js";
+import { toGraphFields } from "../internal/utils.js";
 
 export type Expire = (postId: string, time: number, type: PostExpiration["type"]) => Promise<void>;
 export type GetPost = <F extends FbFieldSelector<FacebookPost>>(

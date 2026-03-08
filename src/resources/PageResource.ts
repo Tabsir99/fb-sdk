@@ -10,7 +10,7 @@ import {
   PublishImageParams,
   PublishImageResponse,
 } from "../types/facebookmedia.js";
-import { toGraphFields } from "../utils.js";
+import { toGraphFields } from "../internal/utils.js";
 import { toSnakeFormData } from "../lib/transformCase.js";
 import { pollReelStatus, pollVideoStatus } from "../internal/poller.js";
 import { GetNode, ListEdge } from "../types/shared.js";

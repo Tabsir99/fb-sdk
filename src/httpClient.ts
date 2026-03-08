@@ -2,7 +2,12 @@ import axios, { AxiosRequestConfig } from "axios";
 import { toCamel, toSnakeObj } from "./lib/transformCase.js";
 import FormData from "form-data";
 
-const fbApi = axios.create({ baseURL: "https://graph.facebook.com/v25.0", family: 4 });
+export const api = axios.create({ family: 4 });
+const fbApi = axios.create({
+  baseURL: "https://graph.facebook.com/v25.0",
+  family: 4,
+  headers: { "Accept-Encoding": "gzip, deflate, br" },
+});
 
 interface HttpResponse<T> {
   data: T;
@@ -38,6 +43,7 @@ export function createHttpClient(accessToken: string): HttpClient {
       const res = await fbApi.post(path, isForm ? data : toSnakeObj(data), {
         headers: isForm ? data.getHeaders() : {},
         ...(options?.safe && { validateStatus: (s: number) => s === 200 || s === 504 }),
+        params: { access_token: accessToken },
       });
       const body = toCamel(res.data);
 
@@ -47,5 +53,3 @@ export function createHttpClient(accessToken: string): HttpClient {
     getToken: () => accessToken,
   };
 }
-
-export const api = axios.create({ family: 4 });
