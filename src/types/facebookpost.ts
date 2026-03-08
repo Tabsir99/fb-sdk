@@ -7,12 +7,23 @@ export interface UserRaw {
   picture: { data: PictureData };
 }
 
+export interface CommentAttachmentRaw {
+  media?: { image?: { src: string; width: number; height: number } };
+  url?: string;
+  type?: string;
+}
+
 export interface CommentRaw {
   id: string;
   message: string;
   created_time: string;
   is_hidden: boolean;
   from: UserRaw;
+  like_count: number;
+  comment_count: number;
+  attachment: CommentAttachmentRaw;
+  parent: { id: string };
+  permalink_url: string;
   comments: CollectionOf<CommentRaw, CommentEdgeOptions> & {
     summary: { total_count: number };
   };

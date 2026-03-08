@@ -4,6 +4,9 @@ export interface EdgeOptions {
   limit?: number;
   after?: string;
   before?: string;
+  since?: number;
+  until?: number;
+  order?: ORDER;
 }
 
 export interface CommentEdgeOptions extends EdgeOptions {
@@ -65,12 +68,30 @@ export type DeepStrict<Valid, Inferred> = {
     : never;
 };
 
-export type ListEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 1> = <
+export type ListEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 1, C = void> = <
   F extends FbFieldSelector<T, D>,
->(query: {
-  options?: O;
-  fields: F extends DeepStrict<FbFieldSelector<T, D>, F> ? F : DeepStrict<FbFieldSelector<T, D>, F>;
-}) => Promise<Collection<T, F>>;
+>(
+  query: {
+    options?: O;
+    fields: F extends DeepStrict<FbFieldSelector<T, D>, F>
+      ? F
+      : DeepStrict<FbFieldSelector<T, D>, F>;
+  },
+  ...config: C extends void ? [] : [config?: C]
+) => Promise<Collection<T, F>>;
+
+export type GetEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 1, C = void> = <
+  F extends FbFieldSelector<T, D>,
+>(
+  id: string,
+  query: {
+    options?: O;
+    fields: F extends DeepStrict<FbFieldSelector<T, D>, F>
+      ? F
+      : DeepStrict<FbFieldSelector<T, D>, F>;
+  },
+  ...config: C extends void ? [] : [config?: C]
+) => Promise<Collection<T, F>>;
 
 export type GetNode<T, D extends number = 1> = <F extends FbFieldSelector<T, D>>(
   id: string,

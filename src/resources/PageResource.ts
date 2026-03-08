@@ -41,6 +41,7 @@ export const createPostResource = (http: HttpClient, pageId: string) => {
   };
 
   const list: ListPosts = async (query) => {
+    if (query.options?.limit) query.options.limit = Math.min(query.options.limit, 100);
     return http.get(`/${pageId}/posts`, {
       params: { fields: toGraphFields(query.fields), ...query.options },
     });

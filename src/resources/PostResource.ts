@@ -1,6 +1,6 @@
 import type { HttpClient } from "../httpClient.js";
 import type { Comment, FacebookPost, PostExpiration } from "../types/facebookpost.js";
-import { Collection, FbFieldSelector, FbPickDeep } from "../types/shared.js";
+import { CommentEdgeOptions, FbFieldSelector, FbPickDeep, GetEdge } from "../types/shared.js";
 import { toGraphFields } from "../utils.js";
 
 export type Expire = (postId: string, time: number, type: PostExpiration["type"]) => Promise<void>;
@@ -29,10 +29,7 @@ export function createPostResource(http: HttpClient) {
   };
 }
 
-export type GetComments = <F extends FbFieldSelector<Comment>>(
-  postId: string,
-  fields: F,
-) => Promise<Collection<Comment, F>>;
+export type GetComments = GetEdge<Comment, CommentEdgeOptions>;
 
 export const createCommentResource = (http: HttpClient) => {
   const get: GetComments = async (postId, fields) =>
