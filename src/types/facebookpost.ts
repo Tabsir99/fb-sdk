@@ -1,5 +1,6 @@
 import { KeysToCamel } from "../lib/transformCase.js";
-import type { CollectionOf, CommentEdgeOptions, PictureData } from "./shared.js";
+import { CommentEdgeOptions } from "../resources/comment/CommentResource.js";
+import type { CollectionOf, PictureData } from "./shared.js";
 
 export interface UserRaw {
   id: string;

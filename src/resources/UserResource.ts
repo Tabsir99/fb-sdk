@@ -1,27 +1,25 @@
-import { HttpClient } from "../httpClient.js";
 import { toGraphFields } from "../internal/utils.js";
 import { FacebookUser } from "../types/facebookuser.js";
 import { FacebookPage } from "../types/facebookpage.js";
-import { Collection, FbFieldSelector, FbPickDeep } from "../types/shared.js";
+import { FbFieldSelector, FbPickDeep, ListEdge } from "../types/shared.js";
+import { CreateResourceParams } from "../client.js";
 
 export type GetUser = <F extends FbFieldSelector<FacebookUser>>(
   fields: F,
 ) => Promise<FbPickDeep<FacebookUser, F>>;
 
-export type ListAccounts = <F extends FbFieldSelector<FacebookPage>>(
-  fields: F,
-) => Promise<Collection<FacebookPage, F>>;
+export type ListAccounts = ListEdge<FacebookPage>;
 
-export const createUserResource = (http: HttpClient) => {
+export const createUserResource = ({ http, id }: CreateResourceParams) => {
   const get: GetUser = async (fields) =>
-    http.get(`/me`, {
+    http.get(`/${id}`, {
       params: {
         fields: toGraphFields(fields),
       },
     });
 
   const accounts: ListAccounts = async (fields) =>
-    http.get(`/me/accounts`, {
+    http.get(`/${id}/accounts`, {
       params: {
         fields: toGraphFields(fields),
       },

@@ -1,17 +1,15 @@
 type Decrement = [never, 0, 1, 2, 3, 4, 5];
 
-export interface EdgeOptions {
-  limit?: number;
+export interface BaseEdgeOptions {
   after?: string;
   before?: string;
   since?: number;
   until?: number;
-  order?: ORDER;
 }
 
-export interface CommentEdgeOptions extends EdgeOptions {
-  filter?: "toplevel" | "stream";
-  summary?: boolean;
+export interface EdgeOptions extends BaseEdgeOptions {
+  limit?: number;
+  order?: ORDER;
 }
 
 export type FbFieldSelector<T, D extends number = 1> = {
@@ -68,33 +66,18 @@ export type DeepStrict<Valid, Inferred> = {
     : never;
 };
 
+export type Fields<T, F, D extends number = 1> =
+  F extends DeepStrict<FbFieldSelector<T, D>, F> ? F : DeepStrict<FbFieldSelector<T, D>, F>;
+
 export type ListEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 1, C = void> = <
   F extends FbFieldSelector<T, D>,
 >(
-  query: {
-    options?: O;
-    fields: F extends DeepStrict<FbFieldSelector<T, D>, F>
-      ? F
-      : DeepStrict<FbFieldSelector<T, D>, F>;
-  },
-  ...config: C extends void ? [] : [config?: C]
-) => Promise<Collection<T, F>>;
-
-export type GetEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 1, C = void> = <
-  F extends FbFieldSelector<T, D>,
->(
-  id: string,
-  query: {
-    options?: O;
-    fields: F extends DeepStrict<FbFieldSelector<T, D>, F>
-      ? F
-      : DeepStrict<FbFieldSelector<T, D>, F>;
-  },
+  query: { fields: Fields<T, F, D>; options?: O },
   ...config: C extends void ? [] : [config?: C]
 ) => Promise<Collection<T, F>>;
 
 export type GetNode<T, D extends number = 1> = <F extends FbFieldSelector<T, D>>(
-  fields: F extends DeepStrict<FbFieldSelector<T, D>, F> ? F : DeepStrict<FbFieldSelector<T, D>, F>,
+  fields: Fields<T, F, D>,
 ) => Promise<FbPickDeep<T, F>>;
 
 export enum ORDER {
@@ -120,31 +103,6 @@ export interface PictureData {
   is_silhouette: boolean;
   url: string;
   width: number;
-}
-
-export interface InsightPaging {
-  previous: string;
-  next: string;
-}
-
-interface InsightValue {
-  value: number;
-  end_time: string;
-}
-export interface InsightRaw {
-  id: string;
-  name: string;
-  title: string;
-  description: string;
-  period: "day" | "week";
-  values: InsightValue[];
-}
-
-export interface RevenueValue extends InsightValue {
-  earning_source: "video" | "reel" | "image" | "story" | "text";
-}
-export interface RevenueRaw extends InsightRaw {
-  values: RevenueValue[];
 }
 
 export interface BatchSubRequest {

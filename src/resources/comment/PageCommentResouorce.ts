@@ -1,11 +1,11 @@
-import { HttpClient } from "../../httpClient.js";
 import { fetchComments } from "../../internal/fetchers.js";
 import { toGraphFields } from "../../internal/utils.js";
 import { toCamel } from "../../lib/transformCase.js";
 import { Comment } from "../../types/facebookpost.js";
-import { CommentEdgeOptions, ListEdge, ORDER } from "../../types/shared.js";
-import { PageCommentConfig } from "../CommentResource.js";
+import { ListEdge, ORDER } from "../../types/shared.js";
+import { CommentEdgeOptions, PageCommentConfig } from "./CommentResource.js";
 import { createPostsResource } from "../PageResource.js";
+import { CreateResourceParams } from "../../client.js";
 
 // ─── Cursor Encoding ───
 interface AggregationCursor {
@@ -25,16 +25,16 @@ function decodeCursor(encoded: string): AggregationCursor {
 }
 
 export type GetPageComments = ListEdge<Comment, CommentEdgeOptions, 1, PageCommentConfig>;
-export function createPageCommentsResource(http: HttpClient, pageId: string) {
-  const PostResource = createPostsResource(http, pageId);
+export function createPageCommentsResource({ http, id, config }: CreateResourceParams) {
+  const PostResource = createPostsResource({ http, id });
+  const store = config?.store;
   /**
    * Aggregated page-level comments from multiple posts.
    *
    * On-demand mode (no store): fetches recent posts from feed, then comments from each.
    * Webhook-assisted mode (store provided): fetches comments only from posts with known activity.
    */
-  const list: GetPageComments = async (query, config = {}) => {
-    const { store, postsLimit = 50 } = config;
+  const list: GetPageComments = async (query) => {
     const { since, until, after, limit = 300 } = query.options ?? {};
 
     let postIds: string[];
@@ -46,12 +46,12 @@ export function createPageCommentsResource(http: HttpClient, pageId: string) {
       postIds = decoded.remaining.length > 0 ? decoded.remaining : decoded.postIds;
       cursors = decoded.cursors;
     } else if (store && since) {
-      postIds = await store.getActivePosts(pageId, since);
+      postIds = await store.getActivePosts(id, since);
     } else {
       const posts = await PostResource.list({
         fields: { id: true },
         options: {
-          limit: postsLimit,
+          limit: 50,
           ...(until && { until }),
           order: ORDER.NEWEST,
         },

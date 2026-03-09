@@ -1,14 +1,8 @@
 import FormData from "form-data";
 
-type SnakeToCamel<S extends string> = S extends `${infer H}_${infer T}`
+export type SnakeToCamel<S extends string> = S extends `${infer H}_${infer T}`
   ? `${H}${Capitalize<SnakeToCamel<T>>}`
   : S;
-
-// export type KeysToCamel<T> = T extends (infer U)[]
-//   ? KeysToCamel<U>[]
-//   : T extends object
-//     ? { [K in keyof T as SnakeToCamel<string & K>]: KeysToCamel<T[K]> }
-//     : T;
 
 export type KeysToCamel<T> = T extends (infer U)[]
   ? KeysToCamel<U>[]
@@ -17,13 +11,11 @@ export type KeysToCamel<T> = T extends (infer U)[]
     : T;
 
 export function toCamel<T>(obj: T): KeysToCamel<T> {
+  if (typeof obj === "string") return toCamelCase(obj) as any;
   if (Array.isArray(obj)) return obj.map(toCamel) as KeysToCamel<T>;
   if (obj && typeof obj === "object") {
     return Object.fromEntries(
-      Object.entries(obj).map(([k, v]) => [
-        k.replace(/_([a-z])/g, (_, c) => c.toUpperCase()),
-        toCamel(v),
-      ]),
+      Object.entries(obj).map(([k, v]) => [toCamelCase(k), toCamel(v)]),
     ) as KeysToCamel<T>;
   }
   return obj as KeysToCamel<T>;
@@ -43,6 +35,9 @@ export type KeysToSnake<T> = T extends (infer U)[]
 
 export function toSnakeCase(str: string): string {
   return str.replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}`);
+}
+export function toCamelCase(str: string): string {
+  return str.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }
 
 export function toSnakeObj<T>(obj: T): KeysToSnake<T> {

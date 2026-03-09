@@ -20,7 +20,7 @@ import { fbGraph } from "fb-sdk";
 const fb = fbGraph("your-access-token");
 
 // Get a post — only the fields you select exist on the result
-const post = await fb.posts.get("postId", {
+const post = await fb.post("postId").get({
   id: true,
   message: true,
   comments: {
@@ -111,16 +111,16 @@ When an edge has option-dependent response fields (e.g., `comments` includes a `
 
 ## Available Resources
 
-### `fb.posts`
+### `fb.post(postId)`
 
-Operations on posts by ID.
+Operations on a specific post by ID.
 
-#### `fb.posts.get(postId, fields)`
+#### `fb.post(postId).get(fields)`
 
 Fetch a single post.
 
 ```typescript
-const post = await fb.posts.get("postId", {
+const post = await fb.post("postId").get({
   id: true,
   statusType: true,
   createdTime: true,
@@ -129,26 +129,31 @@ const post = await fb.posts.get("postId", {
 });
 ```
 
-#### `fb.posts.expire(postId, time, type)`
+#### `fb.post(postId).expire(time, type)`
 
 Set an expiration on a post.
 
 ```typescript
-await fb.posts.expire("postId", Date.now() + 86400000, "expire_only");
+await fb.post("postId").expire(Date.now() + 86400000, "expire_only");
 ```
 
-#### `fb.posts.comments.get(postId, fields)`
+#### `fb.post(postId).comments.list(fields)`
 
-Fetch comments on a post.
+Fetch comments on a post. Also provides a `.create(data)` method to add a comment.
 
 ```typescript
-const comments = await fb.posts.comments.get("postId", {
+const comments = await fb.post("postId").comments.list({
   id: true,
   message: true,
   from: { name: true },
 });
 // comments.data    — Comment[]
 // comments.paging  — Paging
+
+// Create a comment
+const newComment = await fb.post("postId").comments.create({
+  message: "Hello world!"
+});
 ```
 
 ---
@@ -181,26 +186,31 @@ const pages = await fb.me.accounts({
 
 ---
 
-### `fb.pages(pageId)`
+### `fb.page(pageId)`
 
-Operations scoped to a specific Page. Returns sub-resources for posts, videos, reels, and images.
+Operations scoped to a specific Page. Returns sub-resources for posts, videos, reels, images, and aggregated comments.
 
 ```typescript
-const page = fb.pages("pageId");
+const page = fb.page("pageId");
 ```
 
-#### `page.posts.list(query)` / `page.posts.get(postId, fields)`
+#### `page.posts.list(query)` 
 
-List or fetch posts on a Page.
+List posts on a Page. Note: to fetch a specific post, use `fb.post(postId).get()`.
 
 ```typescript
 const feed = await page.posts.list({
   fields: { id: true, message: true, createdTime: true },
 });
+```
 
-const post = await page.posts.get("postId", {
-  id: true,
-  message: true,
+#### `page.comments.list(query, config)`
+
+Fetch an aggregated stream of comments across recent page posts.
+
+```typescript
+const allComments = await page.comments.list({
+  fields: { id: true, message: true, createdTime: true }
 });
 ```
 
@@ -223,9 +233,9 @@ const { postId } = await page.videos.publish({
 
 Publishing handles the upload, waits for processing via polling, and returns the resulting post ID. Throws `FacebookUploadError` on failure.
 
-#### `page.reels.list(query)` / `page.reels.get(reelId, fields)` / `page.reels.publish(data)`
+#### `page.reels.list(query)` / `page.reels.publish(data)`
 
-List, fetch, or publish reels. Publishing uses Facebook's resumable upload protocol (start session → upload file → finish session) and polls until the reel is processed.
+List or publish reels. Publishing uses Facebook's resumable upload protocol (start session → upload file → finish session) and polls until the reel is processed.
 
 ```typescript
 const { postId } = await page.reels.publish({
@@ -235,15 +245,38 @@ const { postId } = await page.reels.publish({
 });
 ```
 
-#### `page.images.list(query)` / `page.images.get(imageId, fields)` / `page.images.publish(data)`
+#### `page.images.list(query)` / `page.images.publish(data)`
 
-List, fetch, or publish images.
+List or publish images.
 
 ```typescript
 const { postId } = await page.images.publish({
   url: "https://example.com/image.jpg",
   caption: "My image",
 });
+```
+
+---
+
+### `fb.comment(commentId)`
+
+Operations to manage a single comment node.
+
+```typescript
+const myComment = fb.comment("commentId");
+
+// Update message
+await myComment.update({ message: "new message" });
+
+// Like / unlike
+await myComment.like();
+await myComment.unlike();
+
+// Delete
+await myComment.delete();
+
+// Get nested replies
+const subComments = await myComment.replies.list({ id: true, message: true });
 ```
 
 ## Adding New Endpoints
@@ -305,8 +338,8 @@ export const createStoryResource = (http: HttpClient, pageId: string) => {
       params: { fields: toGraphFields(query.fields), ...query.options },
     });
 
-  const get: GetStory = async (id, fields) =>
-    http.get(`/${id}`, {
+  const get: GetStory = async (fields) =>
+    http.get(`/${pageId}`, {
       params: { fields: toGraphFields(fields) },
     });
 
@@ -322,8 +355,8 @@ Add the resource to the appropriate factory in `src/client.ts`:
 export function fbGraph(accessToken: string) {
   const http = createHttpClient(accessToken);
   return {
-    posts: createPostResource(http),
-    pages: (pageId: string) => ({
+    post: (postId: string) => createPostResource(http, postId),
+    page: (pageId: string) => ({
       ...createPageResource(http, pageId),
       stories: createStoryResource(http, pageId),
     }),

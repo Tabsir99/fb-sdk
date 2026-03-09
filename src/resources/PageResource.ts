@@ -1,4 +1,4 @@
-import { api, HttpClient } from "../httpClient.js";
+import { api } from "../httpClient.js";
 import {
   PublishReelParams,
   PublishReelResponse,
@@ -18,24 +18,27 @@ import { FacebookUploadError } from "../internal/error.js";
 import { FacebookPost } from "../types/facebookpost.js";
 import { createMediaResource } from "./PostResource.js";
 import { createPageCommentsResource } from "./comment/PageCommentResouorce.js";
+import { createInsightResource } from "./InsightResource.js";
+import { CreateResourceParams } from "../client.js";
 
-export function createPageResource(http: HttpClient, pageId: string) {
+export function createPageResource(params: CreateResourceParams) {
   return {
-    videos: createVideosResource(http, pageId),
-    reels: createReelsResource(http, pageId),
-    images: createImagesResource(http, pageId),
-    posts: createPostsResource(http, pageId),
-    comments: createPageCommentsResource(http, pageId),
+    videos: createVideosResource(params),
+    reels: createReelsResource(params),
+    images: createImagesResource(params),
+    posts: createPostsResource(params),
+    comments: createPageCommentsResource(params),
+    insights: createInsightResource(params),
   };
 }
 
 export type ListPosts = ListEdge<FacebookPost>;
 export type GetPost = GetNode<FacebookPost>;
 
-export const createPostsResource = (http: HttpClient, pageId: string) => {
+export const createPostsResource = ({ http, id }: CreateResourceParams) => {
   const list: ListPosts = async (query) => {
     if (query.options?.limit) query.options.limit = Math.min(query.options.limit, 100);
-    return http.get(`/${pageId}/posts`, {
+    return http.get(`/${id}/posts`, {
       params: { fields: toGraphFields(query.fields), ...query.options },
     });
   };
@@ -48,9 +51,9 @@ export const createPostsResource = (http: HttpClient, pageId: string) => {
 export type PublishVideo = (data: PublishVideoParams) => Promise<{ postId: string }>;
 export type ListMedia = ListEdge<FacebookMedia>;
 
-export function createVideosResource(http: HttpClient, pageId: string) {
+export function createVideosResource({ http, id }: CreateResourceParams) {
   const list: ListMedia = async (fields, limit = 5) => {
-    return http.get(`/${pageId}/videos`, {
+    return http.get(`/${id}/videos`, {
       params: {
         fields: toGraphFields(fields),
         limit,
@@ -73,7 +76,7 @@ export function createVideosResource(http: HttpClient, pageId: string) {
       form.append("thumb", thumb.data);
     }
 
-    const res = await http.post<PublishVideoResponse>(`/${pageId}/videos`, form, { safe: true });
+    const res = await http.post<PublishVideoResponse>(`/${id}/videos`, form, { safe: true });
     if (res.data.error?.code === 389) throw new FacebookUploadError(JSON.stringify(res.data.error));
 
     if (res.status === 504) return await pollVideoStatus(list, trackingId);
@@ -94,9 +97,9 @@ export type UploadFile = (uploadUrl: string, fileUrl: string) => Promise<void>;
 export type FinishUploadSession = (form: FormData) => Promise<PublishReelResponse>;
 export type PublishReel = (data: PublishReelParams) => Promise<{ postId: string }>;
 
-export function createReelsResource(http: HttpClient, pageId: string) {
+export function createReelsResource({ http, id }: CreateResourceParams) {
   const list: ListMedia = async (fields, limit = 5) => {
-    return await http.get(`/${pageId}/video_reels`, {
+    return await http.get(`/${id}/video_reels`, {
       params: {
         fields: toGraphFields(fields),
         limit,
@@ -105,7 +108,7 @@ export function createReelsResource(http: HttpClient, pageId: string) {
   };
 
   const startUploadSession: StartUploadSession = async () => {
-    return await http.post(`/${pageId}/video_reels`, null, {
+    return await http.post(`/${id}/video_reels`, null, {
       params: { upload_phase: "START" },
     });
   };
@@ -117,7 +120,7 @@ export function createReelsResource(http: HttpClient, pageId: string) {
   };
 
   const finishUploadSession: FinishUploadSession = async (form) => {
-    return await http.post(`/${pageId}/video_reels`, form);
+    return await http.post(`/${id}/video_reels`, form);
   };
 
   const publish: PublishReel = async (data) => {
@@ -143,7 +146,7 @@ export function createReelsResource(http: HttpClient, pageId: string) {
     const { error } = await finishUploadSession(form);
     if (error) throw new FacebookUploadError(JSON.stringify(error));
 
-    return pollReelStatus(createMediaResource(http, videoId).get);
+    return pollReelStatus(createMediaResource({ http, id: videoId }).get);
   };
 
   return {
@@ -154,10 +157,10 @@ export function createReelsResource(http: HttpClient, pageId: string) {
 
 export type PublishImage = (data: PublishImageParams) => Promise<{ postId: string }>;
 
-export function createImagesResource(http: HttpClient, pageId: string) {
+export function createImagesResource({ http, id }: CreateResourceParams) {
   const publish: PublishImage = async (data) => {
     const form = toSnakeFormData({ ...data, published: true });
-    const { postId } = await http.post<PublishImageResponse>(`/${pageId}/photos`, form);
+    const { postId } = await http.post<PublishImageResponse>(`/${id}/photos`, form);
     return { postId };
   };
 

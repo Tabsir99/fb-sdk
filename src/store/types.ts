@@ -1,4 +1,4 @@
-export interface CommentStore {
+export interface Store {
   /** Record that a post received comment activity. */
   recordActivity(pageId: string, postId: string, time: number): Promise<void>;
 

@@ -2,12 +2,12 @@ import FormData from "form-data";
 import type { HttpClient } from "../httpClient.js";
 import type { CommentRaw } from "../types/facebookpost.js";
 import {
-  type CommentEdgeOptions,
   type BatchSubRequest,
   type BatchSubResponse,
   type Paging,
   ORDER,
 } from "../types/shared.js";
+import { CommentEdgeOptions } from "../resources/comment/CommentResource.js";
 
 type FetchComments = (
   http: HttpClient,

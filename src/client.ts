@@ -1,29 +1,43 @@
-import { createHttpClient } from "./httpClient.js";
+import { createHttpClient, HttpClient } from "./httpClient.js";
 import { createPostResource } from "./resources/PostResource.js";
 import { createPageResource } from "./resources/PageResource.js";
 import { createUserResource } from "./resources/UserResource.js";
-import { createCommentResource } from "./resources/CommentResource.js";
+import { createCommentResource } from "./resources/comment/CommentResource.js";
+import { Store } from "./client.js";
 
-export function fbGraph(accessToken: string) {
-  const http = createHttpClient(accessToken);
-  return {
-    post: (postId: string) => createPostResource(http, postId),
-    page: (pageId: string) => createPageResource(http, pageId),
-    comment: (commentId: string) => createCommentResource(http, commentId),
-    me: createUserResource(http),
+export interface FbSdkConfig {
+  store?: Store;
+}
+
+export interface CreateResourceParams {
+  http: HttpClient;
+  id: string;
+  config?: FbSdkConfig;
+}
+
+export function createFbSdk(config: FbSdkConfig = {}) {
+  return (accessToken: string) => {
+    const http = createHttpClient(accessToken);
+    return {
+      post: (postId: string) => createPostResource({ http, id: postId, config }),
+      page: (pageId: string) => createPageResource({ http, id: pageId, config }),
+      comment: (commentId: string) => createCommentResource({ http, id: commentId, config }),
+      me: createUserResource({ http, config, id: "me" }),
+    };
   };
 }
 
 export { createMemoryStore } from "./store/memory.js";
 export { createRedisStore } from "./store/redis.js";
 export { createWebhookHandler } from "./webhook/handler.js";
-export type { CommentStore } from "./store/types.js";
+export type { Store } from "./store/types.js";
 export type { RedisLike } from "./store/redis.js";
+export type { WebhookHandlerConfig } from "./webhook/handler.js";
 export type {
-  WebhookHandlerConfig,
   WebhookPayload,
   WebhookEntry,
   WebhookChange,
   WebhookFeedValue,
-} from "./webhook/handler.js";
-export type { PageCommentConfig } from "./resources/CommentResource.js";
+} from "./types/webhook.js";
+export type { PageCommentConfig } from "./resources/comment/CommentResource.js";
+export type * from "./types/facebookinsights.js";

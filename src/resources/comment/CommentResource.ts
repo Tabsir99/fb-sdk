@@ -1,21 +1,25 @@
-import { api, type HttpClient } from "../httpClient.js";
-import type { Comment, CreateCommentParams, CreateCommentResponse } from "../types/facebookpost.js";
-import type { CommentEdgeOptions, ListEdge } from "../types/shared.js";
-import type { CommentStore } from "../store/types.js";
-import { toGraphFields } from "../internal/utils.js";
-import { toSnakeFormData } from "../lib/transformCase.js";
+import { api, type HttpClient } from "../../httpClient.js";
+import type {
+  Comment,
+  CreateCommentParams,
+  CreateCommentResponse,
+} from "../../types/facebookpost.js";
+import type { EdgeOptions, ListEdge } from "../../types/shared.js";
+import { toGraphFields } from "../../internal/utils.js";
+import { toSnakeFormData } from "../../lib/transformCase.js";
 import {
   UpdateCommentParams,
   UpdateCommentResponse,
   DeleteCommentResponse,
   LikeCommentResponse,
-} from "../types/facebookpost.js";
-import { GetNode } from "../types/shared.js";
-import { FacebookUploadError } from "../internal/error.js";
+} from "../../types/facebookpost.js";
+import { GetNode } from "../../types/shared.js";
+import { FacebookUploadError } from "../../internal/error.js";
+import { CreateResourceParams, Store } from "../../client.js";
 
 export interface PageCommentConfig {
   /** Webhook store for targeted fetching of recently-active posts. */
-  store?: CommentStore;
+  store?: Store;
   /** Max posts to scan in on-demand mode (default: 50, max: 100). */
   postsLimit?: number;
 }
@@ -30,29 +34,29 @@ export type DeleteComment = () => Promise<DeleteCommentResponse>;
 export type LikeComment = () => Promise<LikeCommentResponse>;
 export type UnlikeComment = () => Promise<LikeCommentResponse>;
 
-export function createCommentResource(http: HttpClient, commentId: string) {
+export function createCommentResource({ http, id }: CreateResourceParams) {
   const get: GetComment = async (fields) =>
-    http.get(`/${commentId}`, {
+    http.get(`/${id}`, {
       params: { fields: toGraphFields(fields) },
     });
 
   const update: UpdateComment = async (data) => {
-    return http.post<UpdateCommentResponse>(`/${commentId}`, data);
+    return http.post<UpdateCommentResponse>(`/${id}`, data);
   };
 
   const remove: DeleteComment = async () => {
-    return http.delete<DeleteCommentResponse>(`/${commentId}`);
+    return http.delete<DeleteCommentResponse>(`/${id}`);
   };
 
   const like: LikeComment = async () => {
-    return http.post<LikeCommentResponse>(`/${commentId}/likes`, null);
+    return http.post<LikeCommentResponse>(`/${id}/likes`, null);
   };
 
   const unlike: UnlikeComment = async () => {
-    return http.delete<LikeCommentResponse>(`/${commentId}/likes`);
+    return http.delete<LikeCommentResponse>(`/${id}/likes`);
   };
 
-  const { create: reply, list: replies } = createCommenstResource(http, commentId);
+  const { create: reply, list: replies } = createCommenstResource(http, id);
 
   return {
     get,
@@ -63,6 +67,11 @@ export function createCommentResource(http: HttpClient, commentId: string) {
     reply,
     replies,
   };
+}
+
+export interface CommentEdgeOptions extends EdgeOptions {
+  filter?: "toplevel" | "stream";
+  summary?: boolean;
 }
 
 export type GetComments = ListEdge<Comment, CommentEdgeOptions>;

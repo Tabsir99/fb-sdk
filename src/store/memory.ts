@@ -1,10 +1,9 @@
-import type { CommentStore } from "./types.js";
-
+import { Store } from "./types.js";
 /**
- * Creates an in-memory CommentStore.
+ * Creates an in-memory Store.
  * Suitable for single-process apps. Data is lost on restart.
  */
-export function createMemoryStore(): CommentStore {
+export function createMemoryStore(): Store {
   // pageId → postId → lastActivityTimestamp
   const pages = new Map<string, Map<string, number>>();
 

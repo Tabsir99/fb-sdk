@@ -18,8 +18,9 @@ src/
 │   ├── facebookpage.ts    # Page type (raw + camelCase)
 │   └── facebookuser.ts   # User type (raw + camelCase)
 ├── resources/
-│   ├── PostResource.ts    # Post get, expire, comments
-│   ├── PageResource.ts    # Page-scoped: posts, videos, reels, images (CRUD + publish)
+│   ├── PostResource.ts    # Post get, expire, comments. Media get.
+│   ├── PageResource.ts    # Page-scoped: posts, videos, reels, images (CRUD + publish), comments
+│   ├── CommentResource.ts # Single comment operations, comment replies
 │   └── UserResource.ts    # /me endpoint: user profile, managed pages
 └── internal/
     ├── error.ts           # FacebookUploadError class
@@ -28,13 +29,13 @@ src/
 
 ## Request Flow
 
-Trace of `fb.posts.get("postId", { id: true, comments: { fields: { id: true } } })`:
+Trace of `fb.post("postId").get({ id: true, comments: { fields: { id: true } } })`:
 
 ### 1. Method call — `PostResource.get()`
 
 ```typescript
 // src/resources/PostResource.ts
-const get: GetPost = async (postId, fields) =>
+const get: GetPost = async (fields) =>
   http.get(`/${postId}`, {
     params: { fields: toGraphFields(fields) },
   });
@@ -43,13 +44,10 @@ const get: GetPost = async (postId, fields) =>
 The type `GetPost` is defined as:
 
 ```typescript
-export type GetPost = <F extends FbFieldSelector<FacebookPost>>(
-  postId: string,
-  fields: F,
-) => Promise<FbPickDeep<FacebookPost, F>>;
+export type GetPost = GetNode<FacebookPost>;
 ```
 
-When the consumer calls `get("postId", { id: true, comments: { fields: { id: true } } })`, TypeScript:
+When the consumer calls `get({ id: true, comments: { fields: { id: true } } })` on the instantiated `PostResource`, TypeScript:
 
 1. Infers `F` from the literal object
 2. Validates `F` against `FbFieldSelector<FacebookPost>` via `DeepStrict` (not used here in `PostResource.ts` — it uses the simpler `FbFieldSelector` constraint directly)
@@ -216,7 +214,6 @@ Usage in `GetNode`:
 
 ```typescript
 export type GetNode<T, D extends number = 1> = <F extends FbFieldSelector<T, D>>(
-  id: string,
   fields: F extends DeepStrict<FbFieldSelector<T, D>, F> ? F : DeepStrict<FbFieldSelector<T, D>, F>,
 ) => Promise<FbPickDeep<T, F>>;
 ```
@@ -273,7 +270,6 @@ This is how option-dependent fields like `summary: { total_count: number }` on c
 
 ```typescript
 export type GetNode<T, D extends number = 1> = <F extends FbFieldSelector<T, D>>(
-  id: string,
   fields: F extends DeepStrict<FbFieldSelector<T, D>, F> ? F : DeepStrict<FbFieldSelector<T, D>, F>,
 ) => Promise<FbPickDeep<T, F>>;
 
@@ -287,7 +283,7 @@ export type ListEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 
 
 These are the two generic function types used across all resources:
 
-- `GetNode`: fetches a single node by ID. Returns `FbPickDeep<T, F>`.
+- `GetNode`: fetches a single node by its bound ID. Returns `FbPickDeep<T, F>`.
 - `ListEdge`: fetches a paginated edge. Takes an `options` parameter typed as `O` (the edge's specific options). Returns `Collection<T, F>` which is `{ data: FbPickDeep<T, F>[]; paging: Paging }`.
 
 Both use `F extends FbFieldSelector<T, D>` to enable autocomplete (TypeScript infers `F` from the argument and suggests valid keys), while the `DeepStrict` conditional in the parameter position ensures excess properties are rejected.
@@ -377,17 +373,17 @@ In `src/resources/`, create a factory function:
 import type { HttpClient } from "../httpClient.js";
 import type { GetNode, ListEdge } from "../types/shared.js";
 import type { Something } from "../types/facebooksomething.js";
-import { toGraphFields } from "../utils.js";
+import { toGraphFields } from "../internal/utils.js";
 
 export type GetSomething = GetNode<Something>;
 export type ListSomethings = ListEdge<Something>;
 
-export const createSomethingResource = (http: HttpClient, parentId: string) => {
-  const get: GetSomething = async (id, fields) =>
-    http.get(`/${id}`, { params: { fields: toGraphFields(fields) } });
+export const createSomethingResource = (http: HttpClient, itemId: string) => {
+  const get: GetSomething = async (fields) =>
+    http.get(`/${itemId}`, { params: { fields: toGraphFields(fields) } });
 
   const list: ListSomethings = async (query) =>
-    http.get(`/${parentId}/somethings`, {
+    http.get(`/${itemId}/somethings`, {
       params: { fields: toGraphFields(query.fields), ...query.options },
     });
 
@@ -406,7 +402,7 @@ export function fbGraph(accessToken: string) {
   const http = createHttpClient(accessToken);
   return {
     // ... existing resources
-    somethings: createSomethingResource(http),
+    something: (itemId: string) => createSomethingResource(http, itemId),
   };
 }
 ```

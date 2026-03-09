@@ -1,37 +1,8 @@
 import { createHmac } from "crypto";
-import type { CommentStore } from "../store/types.js";
+import type { Store } from "../store/types.js";
+import { WebhookPayload } from "../types/webhook.js";
 
 // ─── Webhook Payload Types ───
-
-export interface WebhookEntry {
-  id: string;
-  time: number;
-  changes: WebhookChange[];
-}
-
-export interface WebhookChange {
-  field: string;
-  value: WebhookFeedValue;
-}
-
-export interface WebhookFeedValue {
-  from?: { id: string; name: string };
-  item: string;
-  verb: string;
-  post_id?: string;
-  comment_id?: string;
-  parent_id?: string;
-  created_time: number;
-  is_hidden?: boolean;
-  message?: string;
-}
-
-export interface WebhookPayload {
-  object: string;
-  entry: WebhookEntry[];
-}
-
-// ─── Minimal req/res interfaces (framework-agnostic) ───
 
 interface VerifyRequest {
   query: Record<string, string | string[] | undefined>;
@@ -52,7 +23,7 @@ interface Response {
 // ─── Handler Config ───
 
 export interface WebhookHandlerConfig {
-  store: CommentStore;
+  store: Store;
   verifyToken: string;
   appSecret: string;
 }
@@ -63,8 +34,7 @@ function verifySignature(
   signature: string | undefined,
 ): boolean {
   if (!signature) return false;
-  const expected =
-    "sha256=" + createHmac("sha256", appSecret).update(rawBody).digest("hex");
+  const expected = "sha256=" + createHmac("sha256", appSecret).update(rawBody).digest("hex");
   return signature === expected;
 }
 
@@ -114,9 +84,7 @@ export function createWebhookHandler(config: WebhookHandlerConfig) {
         if (change.field !== "feed") continue;
         const { value } = change;
         if (value.item === "comment" && value.verb === "add" && value.post_id) {
-          promises.push(
-            store.recordActivity(pageId, value.post_id, value.created_time),
-          );
+          promises.push(store.recordActivity(pageId, value.post_id, value.created_time));
         }
       }
     }
