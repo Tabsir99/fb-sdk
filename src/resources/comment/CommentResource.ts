@@ -1,4 +1,4 @@
-import { api, type HttpClient } from "../../httpClient.js";
+import { api } from "../../httpClient.js";
 import type {
   Comment,
   CreateCommentParams,
@@ -56,7 +56,7 @@ export function createCommentResource({ http, id }: CreateResourceParams) {
     return http.delete<LikeCommentResponse>(`/${id}/likes`);
   };
 
-  const { create: reply, list: replies } = createCommenstResource(http, id);
+  const { create: reply, list: replies } = createCommenstResource({ http, id });
 
   return {
     get,
@@ -80,9 +80,9 @@ export type CreateComment = (data: CreateCommentParams) => Promise<CreateComment
 /**
  * ObjectId can be a post or comment Id
  */
-export const createCommenstResource = (http: HttpClient, objectId: string) => {
+export const createCommenstResource = ({ http, id }: CreateResourceParams) => {
   const list: GetComments = async (fields) =>
-    http.get(`/${objectId}/comments`, {
+    http.get(`/${id}/comments`, {
       params: {
         fields: toGraphFields(fields),
       },
@@ -90,29 +90,18 @@ export const createCommenstResource = (http: HttpClient, objectId: string) => {
 
   const create: CreateComment = async (data) => {
     const { sourceUrl, ...apiFields } = data;
+    const form = toSnakeFormData(apiFields);
 
     if (sourceUrl) {
-      const form = toSnakeFormData(apiFields);
       const source = await api.get(sourceUrl, { responseType: "stream" });
       form.append("source", source.data);
-
-      const res = await http.post<CreateCommentResponse>(`/${objectId}/comments`, form, {
-        safe: true,
-      });
-
-      // Similar to page publish operations, if there's an error shape we throw it
-      if ((res.data as any).error) {
-        throw new FacebookUploadError(JSON.stringify((res.data as any).error));
-      }
-
-      return res.data;
     }
 
-    // No file upload, standard JSON POST
-    const res = await http.post<CreateCommentResponse>(`/${objectId}/comments`, apiFields, {
+    const res = await http.post<CreateCommentResponse>(`/${id}/comments`, form, {
       safe: true,
     });
 
+    // Similar to page publish operations, if there's an error shape we throw it
     if ((res.data as any).error) {
       throw new FacebookUploadError(JSON.stringify((res.data as any).error));
     }

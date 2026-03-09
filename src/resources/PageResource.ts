@@ -18,7 +18,7 @@ import { FacebookUploadError } from "../internal/error.js";
 import { FacebookPost } from "../types/facebookpost.js";
 import { createMediaResource } from "./PostResource.js";
 import { createPageCommentsResource } from "./comment/PageCommentResouorce.js";
-import { createInsightResource } from "./InsightResource.js";
+import { createPageInsightResource } from "./InsightResource.js";
 import { CreateResourceParams } from "../client.js";
 
 export function createPageResource(params: CreateResourceParams) {
@@ -28,7 +28,7 @@ export function createPageResource(params: CreateResourceParams) {
     images: createImagesResource(params),
     posts: createPostsResource(params),
     comments: createPageCommentsResource(params),
-    insights: createInsightResource(params),
+    insights: createPageInsightResource(params),
   };
 }
 

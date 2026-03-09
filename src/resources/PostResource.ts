@@ -4,6 +4,7 @@ import { toGraphFields } from "../internal/utils.js";
 import { FacebookMedia } from "../types/facebookmedia.js";
 import { createCommenstResource } from "./comment/CommentResource.js";
 import { CreateResourceParams } from "../client.js";
+import { createPostInsightResource } from "./InsightResource.js";
 
 export type Expire = (time: number, type: PostExpiration["type"]) => Promise<void>;
 export type GetPost = GetNode<FacebookPost>;
@@ -24,7 +25,8 @@ export function createPostResource({ id, http }: CreateResourceParams) {
   return {
     expire,
     get,
-    comments: createCommenstResource(http, id),
+    comments: createCommenstResource({ http, id }),
+    insights: createPostInsightResource({ http, id }),
   };
 }
 
