@@ -1,11 +1,22 @@
 {
-  "name": "fb-sdk",
-  "version": "1.0.0",
+  "name": "@tabsircg/fb-sdk",
+  "version": "1.0.5",
   "description": "",
-  "main": "index.js",
+  "main": "./dist/client.js",
+  "types": "./dist/client.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/client.js",
+      "types": "./dist/client.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/tests/index.ts"
+    "dev": "tsx src/temp/test.ts",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [],
   "author": "",

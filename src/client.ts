@@ -23,6 +23,7 @@ export function createFbSdk(config: FbSdkConfig = {}) {
       page: (pageId: string) => createPageResource({ http, id: pageId, config }),
       comment: (commentId: string) => createCommentResource({ http, id: commentId, config }),
       me: createUserResource({ http, config, id: "me" }),
+      http,
     };
   };
 }
@@ -33,11 +34,12 @@ export { createWebhookHandler } from "./webhook/handler.js";
 export type { Store } from "./store/types.js";
 export type { RedisLike } from "./store/redis.js";
 export type { WebhookHandlerConfig } from "./webhook/handler.js";
-export type {
-  WebhookPayload,
-  WebhookEntry,
-  WebhookChange,
-  WebhookFeedValue,
-} from "./types/webhook.js";
 export type { PageCommentConfig } from "./resources/comment/CommentResource.js";
+
 export type * from "./types/facebookinsights.js";
+export type * from "./types/facebookmedia.js";
+export type * from "./types/facebookpage.js";
+export type * from "./types/facebookpost.js";
+export type * from "./types/facebookuser.js";
+export type * from "./types/shared.js";
+export type * from "./types/webhook.js";

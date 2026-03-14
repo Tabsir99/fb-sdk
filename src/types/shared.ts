@@ -69,12 +69,12 @@ export type DeepStrict<Valid, Inferred> = {
 export type Fields<T, F, D extends number = 1> =
   F extends DeepStrict<FbFieldSelector<T, D>, F> ? F : DeepStrict<FbFieldSelector<T, D>, F>;
 
-export type ListEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 1, C = void> = <
+export type ListEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 1> = <
   F extends FbFieldSelector<T, D>,
->(
-  query: { fields: Fields<T, F, D>; options?: O },
-  ...config: C extends void ? [] : [config?: C]
-) => Promise<Collection<T, F>>;
+>(query: {
+  fields: Fields<T, F, D>;
+  options?: O;
+}) => Promise<Collection<T, F>>;
 
 export type GetNode<T, D extends number = 1> = <F extends FbFieldSelector<T, D>>(
   fields: Fields<T, F, D>,

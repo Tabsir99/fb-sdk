@@ -56,6 +56,12 @@ export interface PageInsightMetricsMap {
   content_monetization_earnings: { currency: "USD"; microAmount: number };
 }
 
+type PageInsightMetricsRaw = {
+  [K in keyof PageInsightMetricsMap]: InsightEntryRaw<K, PageInsightMetricsMap[K]>;
+};
+
+export type PageInsightMetrics = KeysToCamel<PageInsightMetricsRaw>;
+
 export interface PostInsightMetricsMap {
   // Views & Reach
   post_media_view: number;

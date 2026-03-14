@@ -1,10 +1,11 @@
 import { api } from "../../httpClient.js";
 import type {
   Comment,
+  CommentEdgeOptions,
   CreateCommentParams,
   CreateCommentResponse,
 } from "../../types/facebookpost.js";
-import type { EdgeOptions, ListEdge } from "../../types/shared.js";
+import type { ListEdge } from "../../types/shared.js";
 import { toGraphFields } from "../../internal/utils.js";
 import { toSnakeFormData } from "../../lib/transformCase.js";
 import {
@@ -67,11 +68,6 @@ export function createCommentResource({ http, id }: CreateResourceParams) {
     reply,
     replies,
   };
-}
-
-export interface CommentEdgeOptions extends EdgeOptions {
-  filter?: "toplevel" | "stream";
-  summary?: boolean;
 }
 
 export type GetComments = ListEdge<Comment, CommentEdgeOptions>;

@@ -1,11 +1,16 @@
 import { KeysToCamel } from "../lib/transformCase.js";
-import { CommentEdgeOptions } from "../resources/comment/CommentResource.js";
-import type { CollectionOf, PictureData } from "./shared.js";
+import type { BaseEdgeOptions, CollectionOf, ORDER, PictureData } from "./shared.js";
 
 export interface UserRaw {
   id: string;
   name: string;
   picture: { data: PictureData };
+}
+
+export interface CommentEdgeOptions extends BaseEdgeOptions {
+  filter?: "toplevel" | "stream";
+  summary?: boolean;
+  order?: ORDER;
 }
 
 export interface CommentAttachmentRaw {
@@ -42,6 +47,10 @@ export interface CommentRaw {
 }
 export type Comment = KeysToCamel<CommentRaw>;
 
+export interface CommentWithPost extends CommentRaw {
+  post?: Pick<FacebookPostRaw, "id" | "message" | "picture">;
+}
+
 export interface PostExpiration {
   type: "expire_only" | "expire_and_delete";
   time: number;
@@ -50,13 +59,13 @@ export interface PostExpiration {
 export interface FacebookPostRaw {
   id: string;
   status_type: "added_video" | "added_photos";
-  created_time?: string;
+  created_time: string;
   message?: string;
-  picture?: string;
-  full_picture?: string;
-  shares?: { count: number };
-  reactions?: { summary: { total_count: number } };
-  comments?: CollectionOf<CommentRaw, CommentEdgeOptions> & {
+  picture: string;
+  full_picture: string;
+  shares: { count: number };
+  reactions: { summary: { total_count: number } };
+  comments: CollectionOf<CommentRaw, CommentEdgeOptions> & {
     summary: { total_count: number };
   };
   attachments?: {

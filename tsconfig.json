@@ -8,8 +8,8 @@
     "rootDir": "./src", // Source files location
     "outDir": "./dist", // Output directory
     "sourceMap": true, // Generate sourcemaps for debugging
-    "declaration": false, // Generate .d.ts files
-    "declarationMap": false, // Generate sourcemaps for .d.ts files
+    "declaration": true,
+    "declarationMap": true,
 
     // Strict Checks
     "strict": true, // Enable all strict type checking options

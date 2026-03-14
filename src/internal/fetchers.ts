@@ -1,36 +1,29 @@
 import FormData from "form-data";
 import type { HttpClient } from "../httpClient.js";
-import type { CommentRaw } from "../types/facebookpost.js";
-import {
-  type BatchSubRequest,
-  type BatchSubResponse,
-  type Paging,
-  ORDER,
-} from "../types/shared.js";
-import { CommentEdgeOptions } from "../resources/comment/CommentResource.js";
+import type { CommentWithPost, FacebookPostRaw } from "../types/facebookpost.js";
+import { type BatchSubRequest, type BatchSubResponse, ORDER } from "../types/shared.js";
+import type { GetPageComments } from "../resources/comment/PageCommentResouorce.js";
+import { toGraphFields } from "./utils.js";
+
+type GetPageCommentsParams = Parameters<GetPageComments>[0];
 
 type FetchComments = (
   http: HttpClient,
   params: {
     postIds: string[];
-    fieldsStr: string;
-    options: CommentEdgeOptions | undefined;
+    query: GetPageCommentsParams;
     cursors: Record<string, string>;
   },
 ) => Promise<{
-  comments: (CommentRaw & { _postId: string })[];
+  comments: CommentWithPost[];
   nextCursors: Record<string, string>;
-  remaining: string[];
 }>;
 
-export const fetchComments: FetchComments = async (
-  http,
-  { postIds, fieldsStr, options, cursors },
-) => {
-  const allComments: (CommentRaw & { _postId: string })[] = [];
+export const fetchComments: FetchComments = async (http, { postIds, query, cursors }) => {
+  const allComments: CommentWithPost[] = [];
   const nextCursors: Record<string, string> = {};
-  const remaining: string[] = [];
 
+  postIds = [postIds[0]!];
   // Build batch sub-requests (max 50 per batch)
   const chunks: string[][] = [];
   for (let i = 0; i < postIds.length; i += 50) {
@@ -39,23 +32,26 @@ export const fetchComments: FetchComments = async (
 
   for (const chunk of chunks) {
     const batch: BatchSubRequest[] = chunk.map((postId) => {
-      const params = new URLSearchParams();
-      params.set("fields", fieldsStr);
-      params.set("order", options?.order || ORDER.NEWEST);
-      params.set("limit", "5");
+      const {
+        fields: { post, ...commentFields },
+        options,
+      } = query;
 
-      if (options?.filter) params.set("filter", options.filter);
-      if (options?.summary !== undefined) params.set("summary", String(options.summary));
-      if (options?.since) params.set("since", String(options.since));
-      if (options?.until) params.set("until", String(options.until));
+      const commentQuery = toGraphFields({
+        comments: {
+          fields: commentFields,
+          options: {
+            ...options,
+            limit: 1,
+            order: options?.order ?? ORDER.NEWEST,
+            after: cursors[postId],
+          },
+        },
+      });
 
-      const cursor = cursors[postId];
-      if (cursor) params.set("after", cursor);
-
-      console.log(params.toString());
       return {
         method: "GET",
-        relative_url: `${postId}/comments?${params.toString()}`,
+        relative_url: `${postId}?fields=id,message,picture,${commentQuery}`,
       };
     });
 
@@ -68,24 +64,29 @@ export const fetchComments: FetchComments = async (
 
     for (let i = 0; i < responseArray.length; i++) {
       const resp = responseArray[i];
-      const postId = chunk[i]!;
       if (!resp || resp.code !== 200) continue;
 
-      const parsed = JSON.parse(resp.body) as {
-        data: CommentRaw[];
-        paging?: Paging;
-      };
+      const postId = chunk[i]!;
 
-      for (const comment of parsed.data) {
-        allComments.push({ ...comment, _postId: postId });
+      const {
+        id,
+        message = "",
+        picture,
+        comments,
+      } = JSON.parse(resp.body) as Pick<FacebookPostRaw, "id" | "message" | "picture" | "comments">;
+
+      for (const comment of comments.data) {
+        allComments.push({
+          ...comment,
+          post: { id, message, picture },
+        });
       }
 
-      if (parsed.paging?.next && parsed.paging.cursors?.after) {
-        nextCursors[postId] = parsed.paging.cursors.after;
-        remaining.push(postId);
+      if (comments.paging?.next && comments.paging.cursors?.after) {
+        nextCursors[postId] = comments.paging.cursors.after;
       }
     }
   }
 
-  return { comments: allComments, nextCursors, remaining };
+  return { comments: allComments, nextCursors };
 };
