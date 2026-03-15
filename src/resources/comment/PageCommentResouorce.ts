@@ -8,7 +8,6 @@ import { CreateResourceParams } from "../../client.js";
 // ─── Cursor Encoding ───
 interface AggregationCursor {
   cursors: Record<string, string>;
-  // postCursor?: string | undefined;
 }
 
 function encodeCursor(cursor: AggregationCursor): string {

@@ -4,6 +4,7 @@ import { createPageResource } from "./resources/PageResource.js";
 import { createUserResource } from "./resources/UserResource.js";
 import { createCommentResource } from "./resources/comment/CommentResource.js";
 import { Store } from "./client.js";
+import { createBatchResource } from "./resources/createBatchResource.js";
 
 export interface FbSdkConfig {
   store?: Store;
@@ -24,6 +25,7 @@ export function createFbSdk(config: FbSdkConfig = {}) {
       comment: (commentId: string) => createCommentResource({ http, id: commentId, config }),
       me: createUserResource({ http, config, id: "me" }),
       http,
+      batch: createBatchResource(http),
     };
   };
 }
