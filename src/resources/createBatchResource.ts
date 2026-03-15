@@ -1,58 +1,45 @@
 import FormData from "form-data";
 import type { HttpClient } from "../httpClient.js";
-import type { BatchSubRequest, BatchSubResponse } from "../types/shared.js";
+import type { BatchableRequest, BatchSubRequest, BatchSubResponse } from "../types/shared.js";
+import { toCamel } from "../lib/transformCase.js";
 
 export interface BatchRequestOptions {
   includeHeaders?: boolean;
 }
 
-export interface BatchResult<T> {
-  successes: { index: number; data: any; original: T }[];
-  failures: { index: number; code: number; original: T }[];
-}
+type BatchResponses<T extends readonly BatchSubRequest[]> = {
+  -readonly [K in keyof T]: T[K] extends BatchableRequest<infer R>
+    ? { status: number; data: R }
+    : { status: number; data: any };
+};
 
-export type FBatch = <T>(
-  data: T[],
-  mapper: (data: T) => BatchSubRequest,
-  options?: BatchRequestOptions,
-) => Promise<BatchResult<T>>;
+const processResponse = (res: BatchSubResponse) => {
+  if (res.code === 200) {
+    return { status: 200, data: toCamel(JSON.parse(res.body)) };
+  }
+  return { status: res.code, data: res.body };
+};
 
 export function createBatchResource(http: HttpClient) {
-  const batch: FBatch = async (data, mapper, options) => {
-    const allResponses: { response: BatchSubResponse; original: (typeof data)[number] }[] = [];
+  const batch = async <const T extends readonly BatchSubRequest[]>(
+    requests: T,
+    options?: BatchRequestOptions,
+  ): Promise<BatchResponses<T>> => {
+    const allResponses: BatchSubResponse[] = [];
     const includeHeaders = options?.includeHeaders ?? false;
 
-    for (let i = 0; i < data.length; i += 50) {
-      const chunk = data.slice(i, i + 50);
+    for (let i = 0; i < requests.length; i += 50) {
       const form = new FormData();
-      form.append("batch", JSON.stringify(chunk.map(mapper)));
+
+      form.append("batch", JSON.stringify(requests.slice(i, i + 50)));
       form.append("include_headers", includeHeaders ? "true" : "false");
 
       const responses = await http.post<BatchSubResponse[]>("/", form);
       const responseArray = Array.isArray(responses) ? responses : [];
-
-      responseArray.forEach((response, j) => {
-        allResponses.push({ response, original: chunk[j]! });
-      });
+      allResponses.push(...responseArray);
     }
 
-    const successes: BatchResult<any>["successes"] = [];
-    const failures: BatchResult<any>["failures"] = [];
-
-    allResponses.forEach(({ response, original }, index) => {
-      if (response.code === 200) {
-        const parsed = JSON.parse(response.body);
-        successes.push({
-          index,
-          data: parsed,
-          original,
-        });
-      } else {
-        failures.push({ index, code: response.code, original });
-      }
-    });
-
-    return { successes, failures };
+    return allResponses.map(processResponse) as BatchResponses<T>;
   };
 
   return batch;

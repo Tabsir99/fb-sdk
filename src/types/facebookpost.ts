@@ -1,5 +1,5 @@
 import { KeysToCamel } from "../lib/transformCase.js";
-import type { BaseEdgeOptions, CollectionOf, ORDER, PictureData } from "./shared.js";
+import type { CollectionOf, PictureData, BaseEdgeOptions, ORDER } from "./shared.js";
 
 export interface UserRaw {
   id: string;

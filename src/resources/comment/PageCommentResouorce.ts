@@ -1,5 +1,5 @@
 import { fetchComments } from "../../internal/fetchers.js";
-import { KeysToCamel, toCamel } from "../../lib/transformCase.js";
+import { KeysToCamel } from "../../lib/transformCase.js";
 import { CommentEdgeOptions, CommentWithPost } from "../../types/facebookpost.js";
 import { Collection, Fields, FbFieldSelector, ORDER } from "../../types/shared.js";
 import { createPostsResource } from "../PageResource.js";
@@ -20,8 +20,8 @@ function decodeCursor(encoded: string): AggregationCursor {
 
 type PageComment = KeysToCamel<CommentWithPost>;
 
-export type GetPageComments = <F extends FbFieldSelector<PageComment, 2>>(query: {
-  fields: Fields<PageComment, F, 2>;
+export type GetPageComments = <F extends FbFieldSelector<PageComment>>(query: {
+  fields: Fields<PageComment, F>;
   options?: CommentEdgeOptions;
 }) => Promise<Collection<PageComment, F>>;
 
@@ -71,10 +71,8 @@ export function createPageCommentsResource({ http, id, config }: CreateResourceP
       cursors,
     });
 
-    const camelData = comments.map(toCamel);
-
     return {
-      data: camelData as any,
+      data: comments as any,
       paging: {
         cursors: {
           before: "",

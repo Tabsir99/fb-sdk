@@ -8,7 +8,7 @@ export interface BatchableRequest<T> {
   catch<R = never>(onRejected?: ((reason: any) => R | PromiseLike<R>) | null): Promise<T | R>;
 }
 
-type Decrement = [never, 0, 1, 2, 3, 4, 5];
+type Decrement = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export interface BaseEdgeOptions {
   after?: string;
@@ -22,7 +22,7 @@ export interface EdgeOptions extends BaseEdgeOptions {
   order?: ORDER;
 }
 
-export type FbFieldSelector<T, D extends number = 1> = {
+export type FbFieldSelector<T, D extends number = 10> = {
   [K in keyof T]?: D extends 0
     ? true
     : NonNullable<T[K]> extends CollectionOf<infer U, infer O>
@@ -76,17 +76,17 @@ export type DeepStrict<Valid, Inferred> = {
     : never;
 };
 
-export type Fields<T, F, D extends number = 1> =
+export type Fields<T, F, D extends number = 10> =
   F extends DeepStrict<FbFieldSelector<T, D>, F> ? F : DeepStrict<FbFieldSelector<T, D>, F>;
 
-export type ListEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 1> = <
+export type ListEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 10> = <
   F extends FbFieldSelector<T, D>,
 >(query: {
   fields: Fields<T, F, D>;
   options?: O;
 }) => BatchableRequest<Collection<T, F>>;
 
-export type GetNode<T, D extends number = 1> = <F extends FbFieldSelector<T, D>>(
+export type GetNode<T, D extends number = 10> = <F extends FbFieldSelector<T, D>>(
   fields: Fields<T, F, D>,
 ) => BatchableRequest<FbPickDeep<T, F>>;
 
