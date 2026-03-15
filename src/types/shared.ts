@@ -1,3 +1,13 @@
+export interface BatchableRequest<T> {
+  readonly method: string;
+  readonly relative_url: string;
+  then<R1 = T, R2 = never>(
+    onFulfilled?: ((value: T) => R1 | PromiseLike<R1>) | null,
+    onRejected?: ((reason: any) => R2 | PromiseLike<R2>) | null,
+  ): Promise<R1 | R2>;
+  catch<R = never>(onRejected?: ((reason: any) => R | PromiseLike<R>) | null): Promise<T | R>;
+}
+
 type Decrement = [never, 0, 1, 2, 3, 4, 5];
 
 export interface BaseEdgeOptions {
@@ -74,11 +84,11 @@ export type ListEdge<T, O extends EdgeOptions = EdgeOptions, D extends number = 
 >(query: {
   fields: Fields<T, F, D>;
   options?: O;
-}) => Promise<Collection<T, F>>;
+}) => BatchableRequest<Collection<T, F>>;
 
 export type GetNode<T, D extends number = 1> = <F extends FbFieldSelector<T, D>>(
   fields: Fields<T, F, D>,
-) => Promise<FbPickDeep<T, F>>;
+) => BatchableRequest<FbPickDeep<T, F>>;
 
 export enum ORDER {
   OLDEST = "chronological",

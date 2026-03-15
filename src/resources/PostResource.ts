@@ -15,11 +15,9 @@ export function createPostResource({ id, http }: CreateResourceParams) {
       expiration: { type, time: Math.ceil(time / 1000) } satisfies PostExpiration,
     });
 
-  const get: GetPost = async (fields) =>
+  const get: GetPost = (fields) =>
     http.get(`/${id}`, {
-      params: {
-        fields: toGraphFields(fields),
-      },
+      params: { fields: toGraphFields(fields) },
     });
 
   return {
@@ -32,9 +30,8 @@ export function createPostResource({ id, http }: CreateResourceParams) {
 
 export type GetMedia = GetNode<FacebookMedia>;
 export function createMediaResource({ http, id }: CreateResourceParams) {
-  const get: GetMedia = (fields) => {
-    return http.get(`/${id}`, { params: toGraphFields(fields) });
-  };
+  const get: GetMedia = (fields) =>
+    http.get(`/${id}`, { params: { fields: toGraphFields(fields) } });
 
   return { get };
 }

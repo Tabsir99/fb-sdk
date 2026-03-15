@@ -36,7 +36,7 @@ export type ListPosts = ListEdge<FacebookPost>;
 export type GetPost = GetNode<FacebookPost>;
 
 export const createPostsResource = ({ http, id }: CreateResourceParams) => {
-  const list: ListPosts = async (query) => {
+  const list: ListPosts = (query) => {
     if (query.options?.limit) query.options.limit = Math.min(query.options.limit, 100);
     return http.get(`/${id}/posts`, {
       params: { fields: toGraphFields(query.fields), ...query.options },
@@ -52,14 +52,10 @@ export type PublishVideo = (data: PublishVideoParams) => Promise<{ postId: strin
 export type ListMedia = ListEdge<FacebookMedia>;
 
 export function createVideosResource({ http, id }: CreateResourceParams) {
-  const list: ListMedia = async (fields, limit = 5) => {
-    return http.get(`/${id}/videos`, {
-      params: {
-        fields: toGraphFields(fields),
-        limit,
-      },
+  const list: ListMedia = (query) =>
+    http.get(`/${id}/videos`, {
+      params: { fields: toGraphFields(query.fields), ...query.options },
     });
-  };
 
   const publish: PublishVideo = async (data) => {
     const { thumbnailUrl, ...apiFields } = data;
@@ -98,14 +94,10 @@ export type FinishUploadSession = (form: FormData) => Promise<PublishReelRespons
 export type PublishReel = (data: PublishReelParams) => Promise<{ postId: string }>;
 
 export function createReelsResource({ http, id }: CreateResourceParams) {
-  const list: ListMedia = async (fields, limit = 5) => {
-    return await http.get(`/${id}/video_reels`, {
-      params: {
-        fields: toGraphFields(fields),
-        limit,
-      },
+  const list: ListMedia = (query) =>
+    http.get(`/${id}/video_reels`, {
+      params: { fields: toGraphFields(query.fields), ...query.options },
     });
-  };
 
   const startUploadSession: StartUploadSession = async () => {
     return await http.post(`/${id}/video_reels`, null, {

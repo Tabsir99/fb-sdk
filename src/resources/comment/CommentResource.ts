@@ -36,7 +36,7 @@ export type LikeComment = () => Promise<LikeCommentResponse>;
 export type UnlikeComment = () => Promise<LikeCommentResponse>;
 
 export function createCommentResource({ http, id }: CreateResourceParams) {
-  const get: GetComment = async (fields) =>
+  const get: GetComment = (fields) =>
     http.get(`/${id}`, {
       params: { fields: toGraphFields(fields) },
     });
@@ -77,11 +77,9 @@ export type CreateComment = (data: CreateCommentParams) => Promise<CreateComment
  * ObjectId can be a post or comment Id
  */
 export const createCommenstResource = ({ http, id }: CreateResourceParams) => {
-  const list: GetComments = async (fields) =>
+  const list: GetComments = (query) =>
     http.get(`/${id}/comments`, {
-      params: {
-        fields: toGraphFields(fields),
-      },
+      params: { fields: toGraphFields(query.fields), ...query.options },
     });
 
   const create: CreateComment = async (data) => {
