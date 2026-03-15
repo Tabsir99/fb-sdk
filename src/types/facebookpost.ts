@@ -42,7 +42,7 @@ export interface CommentRaw {
   message_tags?: CollectionOf<{ id: string; name: string }>;
   object?: { id: string };
   comments: CollectionOf<CommentRaw, CommentEdgeOptions> & {
-    summary: { total_count: number };
+    summary?: { total_count: number };
   };
 }
 export type Comment = KeysToCamel<CommentRaw>;
@@ -66,7 +66,7 @@ export interface FacebookPostRaw {
   shares: { count: number };
   reactions: { summary: { total_count: number } };
   comments: CollectionOf<CommentRaw, CommentEdgeOptions> & {
-    summary: { total_count: number };
+    summary?: { total_count: number };
   };
   attachments?: {
     data: {

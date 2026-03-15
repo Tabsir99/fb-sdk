@@ -59,7 +59,7 @@ export const fetchComments: FetchComments = async (http, { postIds, query, curso
 
     for (const comment of comments.data) {
       allComments.push({
-        ...(comment as any),
+        ...comment,
         post: { id, message, picture },
       });
     }

@@ -1,5 +1,5 @@
 import axios, { AxiosRequestConfig } from "axios";
-import { toCamel, toSnakeObj } from "./lib/transformCase.js";
+import { KeysToCamel, toCamel, toSnakeObj } from "./lib/transformCase.js";
 import FormData from "form-data";
 import { createBatchableRequest, buildRelativeUrl } from "./internal/batchable.js";
 import { BatchableRequest } from "./client.js";
@@ -12,7 +12,7 @@ const fbApi = axios.create({
 });
 
 interface HttpResponse<T> {
-  data: T;
+  data: KeysToCamel<T>;
   status: number;
 }
 

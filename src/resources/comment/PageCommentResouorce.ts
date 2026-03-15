@@ -34,6 +34,7 @@ export function createPageCommentsResource({ http, id, config }: CreateResourceP
    *
    * Not batchable — this is a multi-step aggregation, not a single Graph API call.
    */
+
   const list: GetPageComments = async (query) => {
     const { since, until, after } = query.options ?? {};
 

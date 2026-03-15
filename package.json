@@ -15,12 +15,10 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "pnpm test && tsc",
     "dev": "tsx src/temp/test.ts",
     "prepublishOnly": "npm run build",
-    "test": "vitest run",
-    "test:types": "tsc --noEmit --project tsconfig.test.json",
-    "test:all": "npm run test:types && npm run test"
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",

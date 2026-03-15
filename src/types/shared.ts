@@ -32,11 +32,14 @@ export type FbFieldSelector<T, D extends number = 10> = {
         : true;
 };
 
+type TrueKeysOf<O> = { [K in keyof O]: O[K] extends true ? K : never }[keyof O];
+type CollectionExtras<T> = Omit<NonNullable<T>, "data" | "paging" | "_edgeOptions">;
+
 type CleanCollection<T, Data, F> = { data: Data[]; paging: Paging } & (Exclude<
   F,
   undefined
-> extends { options: infer _O }
-  ? Omit<NonNullable<T>, "data" | "paging" | "_edgeOptions">
+> extends { options: infer O }
+  ? Required<Pick<CollectionExtras<T>, Extract<keyof CollectionExtras<T>, TrueKeysOf<O>>>>
   : {});
 
 export type FbPickDeep<T, F> = {
