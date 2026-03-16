@@ -1,15 +1,3 @@
-export interface BatchableRequest<T> {
-  readonly method: string;
-  readonly relative_url: string;
-  /** @internal Applied by batch processor to transform raw response into the expected shape. */
-  readonly _transform?: (raw: any) => T;
-  then<R1 = T, R2 = never>(
-    onFulfilled?: ((value: T) => R1 | PromiseLike<R1>) | null,
-    onRejected?: ((reason: any) => R2 | PromiseLike<R2>) | null,
-  ): Promise<R1 | R2>;
-  catch<R = never>(onRejected?: ((reason: any) => R | PromiseLike<R>) | null): Promise<T | R>;
-}
-
 type Decrement = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export interface BaseEdgeOptions {
@@ -120,9 +108,33 @@ export interface PictureData {
   width: number;
 }
 
+// export interface BatchableRequest<T> {
+//   readonly method: string;
+//   readonly relative_url: string;
+//   // /** @internal Applied by batch processor to transform raw response into the expected shape. */
+//   // readonly _transform?: (raw: any) => T;
+//   then<R1 = T, R2 = never>(
+//     onFulfilled?: ((value: T) => R1 | PromiseLike<R1>) | null,
+//     onRejected?: ((reason: any) => R2 | PromiseLike<R2>) | null,
+//   ): Promise<R1 | R2>;
+//   catch<R = never>(onRejected?: ((reason: any) => R | PromiseLike<R>) | null): Promise<T | R>;
+// }
+
+export interface BatchableRequest<T> {
+  readonly method: string;
+  readonly relative_url: string;
+  transform<U>(fn: (raw: T) => U): BatchableRequest<U>;
+  then<R1 = T, R2 = never>(
+    onFulfilled?: ((value: T) => R1 | PromiseLike<R1>) | null,
+    onRejected?: ((reason: any) => R2 | PromiseLike<R2>) | null,
+  ): Promise<R1 | R2>;
+  catch<R = never>(onRejected?: ((reason: any) => R | PromiseLike<R>) | null): Promise<T | R>;
+}
+
 export interface BatchSubRequest {
   method: string;
   relative_url: string;
+  _transform?: (raw: any) => any;
 }
 
 export interface BatchSubResponse {

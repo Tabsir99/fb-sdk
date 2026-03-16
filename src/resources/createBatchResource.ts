@@ -16,8 +16,7 @@ type BatchResponses<T extends readonly BatchSubRequest[]> = {
 const processResponse = (req: BatchSubRequest, res: BatchSubResponse) => {
   if (res.code === 200) {
     const parsed = toCamel(JSON.parse(res.body));
-    const data =
-      "_transform" in req && typeof req._transform === "function" ? req._transform(parsed) : parsed;
+    const data = req._transform ? req._transform(parsed) : parsed;
     return { status: 200, data };
   }
   return { status: res.code, data: res.body };
@@ -39,10 +38,10 @@ export function createBatchResource(http: HttpClient) {
       form.append("include_headers", includeHeaders ? "true" : "false");
 
       const responses = await http.post<BatchSubResponse[]>("/", form);
-      const responseArray = Array.isArray(responses) ? responses : [];
-      responseArray.forEach((res, idx) => {
-        finalResponses.push(processResponse(chunk[idx]!, res));
-      });
+
+      for (let idx = 0; idx < responses.length; idx++) {
+        finalResponses.push(processResponse(chunk[idx]!, responses[idx]!));
+      }
     }
 
     return finalResponses as BatchResponses<T>;
