@@ -1,6 +1,8 @@
 export interface BatchableRequest<T> {
   readonly method: string;
   readonly relative_url: string;
+  /** @internal Applied by batch processor to transform raw response into the expected shape. */
+  readonly _transform?: (raw: any) => T;
   then<R1 = T, R2 = never>(
     onFulfilled?: ((value: T) => R1 | PromiseLike<R1>) | null,
     onRejected?: ((reason: any) => R2 | PromiseLike<R2>) | null,

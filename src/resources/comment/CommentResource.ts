@@ -5,7 +5,7 @@ import type {
   CreateCommentParams,
   CreateCommentResponse,
 } from "../../types/facebookpost.js";
-import type { ListEdge } from "../../types/shared.js";
+import type { BatchableRequest, ListEdge } from "../../types/shared.js";
 import { toGraphFields } from "../../internal/utils.js";
 import { toSnakeFormData } from "../../lib/transformCase.js";
 import {
@@ -29,11 +29,10 @@ export interface PageCommentConfig {
 
 export type GetComment = GetNode<Comment>;
 
-export type UpdateComment = (data: UpdateCommentParams) => Promise<UpdateCommentResponse>;
-
-export type DeleteComment = () => Promise<DeleteCommentResponse>;
-export type LikeComment = () => Promise<LikeCommentResponse>;
-export type UnlikeComment = () => Promise<LikeCommentResponse>;
+export type UpdateComment = (data: UpdateCommentParams) => BatchableRequest<UpdateCommentResponse>;
+export type DeleteComment = () => BatchableRequest<DeleteCommentResponse>;
+export type LikeComment = () => BatchableRequest<LikeCommentResponse>;
+export type UnlikeComment = () => BatchableRequest<LikeCommentResponse>;
 
 export function createCommentResource({ http, id }: CreateResourceParams) {
   const get: GetComment = (fields) =>
@@ -41,19 +40,19 @@ export function createCommentResource({ http, id }: CreateResourceParams) {
       params: { fields: toGraphFields(fields) },
     });
 
-  const update: UpdateComment = async (data) => {
+  const update: UpdateComment = (data) => {
     return http.post<UpdateCommentResponse>(`/${id}`, data);
   };
 
-  const remove: DeleteComment = async () => {
+  const remove: DeleteComment = () => {
     return http.delete<DeleteCommentResponse>(`/${id}`);
   };
 
-  const like: LikeComment = async () => {
+  const like: LikeComment = () => {
     return http.post<LikeCommentResponse>(`/${id}/likes`, null);
   };
 
-  const unlike: UnlikeComment = async () => {
+  const unlike: UnlikeComment = () => {
     return http.delete<LikeCommentResponse>(`/${id}/likes`);
   };
 

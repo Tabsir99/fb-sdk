@@ -1,19 +1,18 @@
 import {
   CreateResourceParams,
   InsightQuery,
-  InsightRawResponse,
   InsightResponse,
   PageInsightMetrics,
   PostInsightMetrics,
 } from "../client.js";
 import { HttpClient } from "../httpClient.js";
+
 import { toGraphFields } from "../internal/utils.js";
-import { KeysToCamel, SnakeToCamel, toCamel, toSnakeObj } from "../lib/transformCase.js";
-import { FbFieldSelector } from "../types/shared.js";
+import { SnakeToCamel, toCamel, toSnakeObj } from "../lib/transformCase.js";
+import { BatchableRequest, FbFieldSelector } from "../types/shared.js";
+import { InsightRawResponseCamelCase } from "../types/facebookinsights.js";
 
-type _InsightResponse = KeysToCamel<InsightRawResponse>;
-
-const _transformInsightResponse = (data: _InsightResponse["data"]) => {
+const _transformInsightResponse = (data: InsightRawResponseCamelCase["data"]) => {
   const result: Record<string, any> = {};
 
   for (const entry of data) {
@@ -43,18 +42,18 @@ const _transformInsightResponse = (data: _InsightResponse["data"]) => {
 };
 
 const createInsightResource = <TMetrics>(http: HttpClient, id: string) => {
-  const list = async <F extends FbFieldSelector<TMetrics>>(
+  const list = <F extends FbFieldSelector<TMetrics>>(
     query: InsightQuery<TMetrics, F>,
-  ): Promise<InsightResponse<TMetrics, F>> => {
-    const res = await http.get<_InsightResponse>(`/${id}/insights`, {
-      params: {
-        metric: toGraphFields(query.fields),
-        fields: toGraphFields({ name: true, values: true }),
-        ...toSnakeObj(query.options || {}),
-      },
-    });
-
-    return _transformInsightResponse(res.data) as InsightResponse<TMetrics, F>;
+  ): BatchableRequest<InsightResponse<TMetrics, F>> => {
+    return http
+      .get<InsightRawResponseCamelCase>(`/${id}/insights`, {
+        params: {
+          metric: toGraphFields(query.fields),
+          fields: toGraphFields({ name: true, values: true }),
+          ...toSnakeObj(query.options || {}),
+        },
+      })
+      .transform((res) => _transformInsightResponse(res.data)) as any;
   };
 
   return { list };

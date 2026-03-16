@@ -1,19 +1,23 @@
 import { BatchableRequest } from "../client.js";
 import { toSnakeCase } from "../lib/transformCase.js";
 
-export function createBatchableRequest<T>(
+export function createBatchableRequest<T, R = T>(
   method: string,
   relativeUrl: string,
   executor: () => Promise<T>,
-): BatchableRequest<T> {
+  transform?: (raw: T) => R,
+): BatchableRequest<R> {
   return {
     method,
     relative_url: relativeUrl,
+    _transform: transform as any,
     then(onFulfilled, onRejected) {
-      return executor().then(onFulfilled, onRejected);
+      const promise = transform ? executor().then(transform) : executor();
+      return (promise as any).then(onFulfilled, onRejected);
     },
     catch(onRejected) {
-      return executor().then(undefined, onRejected);
+      const promise = transform ? executor().then(transform) : executor();
+      return (promise as any).then(undefined, onRejected);
     },
   };
 }
