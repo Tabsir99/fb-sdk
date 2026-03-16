@@ -15,7 +15,6 @@ import {
   LikeCommentResponse,
 } from "../../types/facebookpost.js";
 import { GetNode } from "../../types/shared.js";
-import { FacebookUploadError } from "../../internal/error.js";
 import { CreateResourceParams, Store } from "../../client.js";
 
 export interface PageCommentConfig {
@@ -90,16 +89,7 @@ export const createCommenstResource = ({ http, id }: CreateResourceParams) => {
       form.append("source", source.data);
     }
 
-    const res = await http.post<CreateCommentResponse>(`/${id}/comments`, form, {
-      safe: true,
-    });
-
-    // Similar to page publish operations, if there's an error shape we throw it
-    if ((res.data as any).error) {
-      throw new FacebookUploadError(JSON.stringify((res.data as any).error));
-    }
-
-    return res.data;
+    return await http.post<CreateCommentResponse>(`/${id}/comments`, form);
   };
 
   return {

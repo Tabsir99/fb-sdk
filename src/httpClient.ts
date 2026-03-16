@@ -1,5 +1,5 @@
 import axios, { AxiosRequestConfig } from "axios";
-import { KeysToCamel, toCamel, toSnakeObj } from "./lib/transformCase.js";
+import { toCamel, toSnakeObj } from "./lib/transformCase.js";
 import FormData from "form-data";
 import { createBatchableRequest, buildRelativeUrl } from "./internal/batchable.js";
 import { BatchableRequest } from "./client.js";
@@ -10,12 +10,8 @@ const fbApi = axios.create({
   baseURL: "https://graph.facebook.com/v25.0",
   family: 4,
   headers: { "Accept-Encoding": "gzip, deflate, br" },
+  transformResponse: (data) => toCamel(JSON.parse(data)),
 });
-
-interface HttpResponse<T> {
-  data: KeysToCamel<T>;
-  status: number;
-}
 
 type Data = FormData | Record<string, unknown> | null;
 
@@ -25,84 +21,66 @@ interface TransformableRequest<T> extends BatchableRequest<T> {
 }
 
 export interface HttpClient {
-  get<T>(
-    path: string,
-    options: AxiosRequestConfig & { safe: true },
-  ): TransformableRequest<HttpResponse<T>>;
-  get<T>(path: string, options?: AxiosRequestConfig & { safe?: false }): TransformableRequest<T>;
-
-  post<T>(
-    path: string,
-    data: Data,
-    options: AxiosRequestConfig & { safe: true },
-  ): TransformableRequest<HttpResponse<T>>;
-  post<T>(
-    path: string,
-    data: Data,
-    options?: AxiosRequestConfig & { safe?: false },
-  ): TransformableRequest<T>;
-
-  delete<T>(
-    path: string,
-    options: AxiosRequestConfig & { safe: true },
-  ): TransformableRequest<HttpResponse<T>>;
-  delete<T>(path: string, options?: AxiosRequestConfig & { safe?: false }): TransformableRequest<T>;
-
+  get<T>(path: string, options?: AxiosRequestConfig): TransformableRequest<T>;
+  post<T>(path: string, data: Data, options?: AxiosRequestConfig): TransformableRequest<T>;
+  delete<T>(path: string, options?: AxiosRequestConfig): TransformableRequest<T>;
   getToken(): string;
 }
 
-// Wraps a BatchableRequest with a .transform() method
 function withTransform<T>(req: BatchableRequest<T>): TransformableRequest<T> {
   (req as TransformableRequest<T>).transform = <U>(fn: (raw: T) => U): BatchableRequest<U> => {
-    const mapped = req.then(fn) as Promise<U>;
-    return Object.assign(mapped, {
+    const prev = req._transform;
+    return {
       method: req.method,
       relative_url: req.relative_url,
-    }) as BatchableRequest<U>;
+      _transform: (raw: any) => fn(prev ? prev(raw) : raw),
+      then(onFulfilled, onRejected) {
+        return req.then(fn).then(onFulfilled, onRejected);
+      },
+      catch(onRejected) {
+        return req.then(fn).then(undefined, onRejected);
+      },
+    };
   };
   return req as TransformableRequest<T>;
 }
 
 export function createHttpClient(accessToken: string): HttpClient {
   return {
-    get: (path: string, options?: any) => {
+    get: (path, options) => {
       const params = options?.params ?? {};
       return withTransform(
-        createBatchableRequest("GET", buildRelativeUrl(path, params), async () => {
-          const res = await fbApi.get(path, {
+        createBatchableRequest("GET", buildRelativeUrl(path, params), async () =>
+          fbApi.get(path, {
             params: { access_token: accessToken, ...params },
-          });
-          const data = toCamel(res.data);
-          return options?.safe ? { data, status: res.status } : data;
-        }),
+            ...options,
+          }),
+        ),
       );
     },
-    post: (path: string, data: any, options?: any) => {
+    post: (path, data, options) => {
       return withTransform(
         createBatchableRequest("POST", buildRelativeUrl(path, {}), async () => {
           const isForm = data instanceof FormData;
-          const res = await fbApi.post(path, isForm ? data : toSnakeObj(data), {
+          return fbApi.post(path, isForm ? data : toSnakeObj(data), {
             headers: isForm ? data.getHeaders() : {},
-            ...(options?.safe && { validateStatus: (s: number) => s === 200 || s === 504 }),
             params: { access_token: accessToken },
+            ...options,
           });
-          const body = toCamel(res.data);
-          return options?.safe ? { data: body, status: res.status } : body;
         }),
       );
     },
-    delete: (path: string, options?: any) => {
+    delete: (path, options) => {
       const params = options?.params ?? {};
       return withTransform(
-        createBatchableRequest("DELETE", buildRelativeUrl(path, params), async () => {
-          const res = await fbApi.delete(path, {
+        createBatchableRequest("DELETE", buildRelativeUrl(path, params), async () =>
+          fbApi.delete(path, {
             params: { access_token: accessToken, ...params },
-          });
-          const data = toCamel(res.data);
-          return options?.safe ? { data, status: res.status } : data;
-        }),
+            ...options,
+          }),
+        ),
       );
     },
     getToken: () => accessToken,
-  } as HttpClient;
+  };
 }
