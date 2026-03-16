@@ -56,4 +56,43 @@ describe("toGraphFields", () => {
       toGraphFields({ id: true, message: true, createdTime: true })
     ).toBe("id,message,created_time");
   });
+
+  it("filters out options with undefined values in edge options", () => {
+    expect(
+      toGraphFields({
+        comments: {
+          fields: { id: true },
+          options: { limit: 5, order: undefined },
+        },
+      })
+    ).toBe("comments.limit(5){id}");
+  });
+
+  it("serializes deeply nested collections (3+ levels)", () => {
+    expect(
+      toGraphFields({
+        comments: {
+          fields: {
+            id: true,
+            comments: {
+              fields: {
+                id: true,
+                message: true,
+              },
+            },
+          },
+        },
+      })
+    ).toBe("comments{id,comments{id,message}}");
+  });
+
+  it("handles mixed selectors: true, nested objects, and collections with options", () => {
+    expect(
+      toGraphFields({
+        id: true,
+        reactions: { summary: true },
+        comments: { fields: { id: true }, options: { limit: 3 } },
+      })
+    ).toBe("id,reactions{summary},comments.limit(3){id}");
+  });
 });
