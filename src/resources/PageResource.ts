@@ -20,6 +20,7 @@ import { createMediaResource } from "./PostResource.js";
 import { createPageCommentsResource } from "./comment/PageCommentResouorce.js";
 import { createPageInsightResource } from "./InsightResource.js";
 import { CreateResourceParams } from "../client.js";
+import { isAxiosError } from "axios";
 
 export function createPageResource(params: CreateResourceParams) {
   return {
@@ -58,25 +59,33 @@ export function createVideosResource({ http, id }: CreateResourceParams) {
     });
 
   const publish: PublishVideo = async (data) => {
-    const { thumbnailUrl, ...apiFields } = data;
     const trackingId = randomUUID();
+    try {
+      const { thumbnailUrl, ...apiFields } = data;
 
-    const form = toSnakeFormData({
-      ...apiFields,
-      universalVideoId: trackingId,
-      published: true,
-    });
+      const form = toSnakeFormData({
+        ...apiFields,
+        universalVideoId: trackingId,
+        published: true,
+      });
 
-    if (thumbnailUrl) {
-      const thumb = await api.get(thumbnailUrl, { responseType: "stream" });
-      form.append("thumb", thumb.data);
+      if (thumbnailUrl) {
+        api
+          .get(thumbnailUrl, { responseType: "stream" })
+          .then((thumb) => form.append("thumb", thumb.data))
+          .catch();
+      }
+
+      const res = await http.post<PublishVideoResponse>(`/${id}/videos`, form);
+      return { postId: res.id! };
+    } catch (error) {
+      if (isAxiosError(error) && error.response) {
+        const { data, status } = error.response;
+        if (data.error?.code === 389) throw new FacebookUploadError(JSON.stringify(data.error));
+        if (status === 504) return await pollVideoStatus(list, trackingId);
+      }
+      throw error;
     }
-
-    const res = await http.post<PublishVideoResponse>(`/${id}/videos`, form, { safe: true });
-    if (res.data.error?.code === 389) throw new FacebookUploadError(JSON.stringify(res.data.error));
-
-    if (res.status === 504) return await pollVideoStatus(list, trackingId);
-    return { postId: res.data.id! };
   };
 
   return {

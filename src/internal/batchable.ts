@@ -5,17 +5,31 @@ export function createBatchableRequest<T>(
   method: string,
   relativeUrl: string,
   executor: () => Promise<T>,
+  _transform?: (raw: any) => any,
 ): BatchableRequest<T> {
-  return {
+  const req: any = {
     method,
     relative_url: relativeUrl,
-    then(onFulfilled, onRejected) {
+    then(onFulfilled?: any, onRejected?: any) {
       return executor().then(onFulfilled, onRejected);
     },
-    catch(onRejected) {
+    catch(onRejected?: any) {
       return executor().then(undefined, onRejected);
     },
+    transform<U>(fn: (raw: T) => U): BatchableRequest<U> {
+      const prev = _transform;
+      return createBatchableRequest<U>(
+        method,
+        relativeUrl,
+        () => executor().then(fn),
+        (raw: any) => fn(prev ? prev(raw) : raw),
+      );
+    },
   };
+
+  if (_transform) req._transform = _transform;
+
+  return req;
 }
 
 export function buildRelativeUrl(path: string, params: Record<string, unknown>): string {

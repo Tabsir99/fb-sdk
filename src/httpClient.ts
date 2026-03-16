@@ -1,35 +1,24 @@
 import axios, { AxiosRequestConfig } from "axios";
-import { KeysToCamel, toCamel, toSnakeObj } from "./lib/transformCase.js";
+import { toCamel, toSnakeObj } from "./lib/transformCase.js";
 import FormData from "form-data";
 import { createBatchableRequest, buildRelativeUrl } from "./internal/batchable.js";
 import { BatchableRequest } from "./client.js";
 
 export const api = axios.create({ family: 4 });
+
 const fbApi = axios.create({
   baseURL: "https://graph.facebook.com/v25.0",
   family: 4,
   headers: { "Accept-Encoding": "gzip, deflate, br" },
+  transformResponse: (data) => toCamel(JSON.parse(data)),
 });
 
-interface HttpResponse<T> {
-  data: KeysToCamel<T>;
-  status: number;
-}
-
-type Options = AxiosRequestConfig & { safe?: false };
-type RawOptions = AxiosRequestConfig & { safe: true };
 type Data = FormData | Record<string, unknown> | null;
 
 export interface HttpClient {
-  get<T>(path: string, options: RawOptions): BatchableRequest<HttpResponse<T>>;
-  get<T>(path: string, options?: Options): BatchableRequest<T>;
-
-  post<T>(path: string, data: Data, options: RawOptions): BatchableRequest<HttpResponse<T>>;
-  post<T>(path: string, data: Data, options?: Options): BatchableRequest<T>;
-
-  delete<T>(path: string, options: RawOptions): BatchableRequest<HttpResponse<T>>;
-  delete<T>(path: string, options?: Options): BatchableRequest<T>;
-
+  get<T>(path: string, options?: AxiosRequestConfig): BatchableRequest<T>;
+  post<T>(path: string, data: Data, options?: AxiosRequestConfig): BatchableRequest<T>;
+  delete<T>(path: string, options?: AxiosRequestConfig): BatchableRequest<T>;
   getToken(): string;
 }
 
@@ -37,40 +26,32 @@ export function createHttpClient(accessToken: string): HttpClient {
   return {
     get: (path, options) => {
       const params = options?.params ?? {};
-      return createBatchableRequest("GET", buildRelativeUrl(path, params), async () => {
-        const res = await fbApi.get(path, {
+      return createBatchableRequest("GET", buildRelativeUrl(path, params), async () =>
+        fbApi.get(path, {
           params: { access_token: accessToken, ...params },
-        });
-        const data = toCamel(res.data);
-        return options?.safe ? { data, status: res.status } : data;
-      });
+          ...options,
+        }),
+      );
     },
-
     post: (path, data, options) => {
       return createBatchableRequest("POST", buildRelativeUrl(path, {}), async () => {
         const isForm = data instanceof FormData;
-        const res = await fbApi.post(path, isForm ? data : toSnakeObj(data), {
+        return fbApi.post(path, isForm ? data : toSnakeObj(data), {
           headers: isForm ? data.getHeaders() : {},
-          ...(options?.safe && { validateStatus: (s: number) => s === 200 || s === 504 }),
           params: { access_token: accessToken },
+          ...options,
         });
-        const body = toCamel(res.data);
-
-        return options?.safe ? { data: body, status: res.status } : body;
       });
     },
-
     delete: (path, options) => {
       const params = options?.params ?? {};
-      return createBatchableRequest("DELETE", buildRelativeUrl(path, params), async () => {
-        const res = await fbApi.delete(path, {
+      return createBatchableRequest("DELETE", buildRelativeUrl(path, params), async () =>
+        fbApi.delete(path, {
           params: { access_token: accessToken, ...params },
-        });
-        const data = toCamel(res.data);
-        return options?.safe ? { data, status: res.status } : data;
-      });
+          ...options,
+        }),
+      );
     },
-
     getToken: () => accessToken,
   };
 }

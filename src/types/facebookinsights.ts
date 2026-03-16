@@ -188,9 +188,11 @@ export interface RecordInsightResult<V extends Record<string, number>> {
 
 export type InsightResult<V> = V extends number
   ? NumericInsightResult
-  : V extends Record<string, number>
-    ? RecordInsightResult<V>
-    : never;
+  : V extends { microAmount: number }
+    ? NumericInsightResult
+    : V extends Record<string, number>
+      ? RecordInsightResult<V>
+      : never;
 
 // ─── Helpers ───
 

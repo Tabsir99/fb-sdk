@@ -13,9 +13,11 @@ type BatchResponses<T extends readonly BatchSubRequest[]> = {
     : { status: number; data: any };
 };
 
-const processResponse = (res: BatchSubResponse) => {
+const processResponse = (req: BatchSubRequest, res: BatchSubResponse) => {
   if (res.code === 200) {
-    return { status: 200, data: toCamel(JSON.parse(res.body)) };
+    const parsed = toCamel(JSON.parse(res.body));
+    const data = req._transform ? req._transform(parsed) : parsed;
+    return { status: 200, data };
   }
   return { status: res.code, data: res.body };
 };
@@ -25,21 +27,24 @@ export function createBatchResource(http: HttpClient) {
     requests: T,
     options?: BatchRequestOptions,
   ): Promise<BatchResponses<T>> => {
-    const allResponses: BatchSubResponse[] = [];
+    const finalResponses: any[] = [];
     const includeHeaders = options?.includeHeaders ?? false;
 
     for (let i = 0; i < requests.length; i += 50) {
+      const chunk = requests.slice(i, i + 50);
       const form = new FormData();
 
-      form.append("batch", JSON.stringify(requests.slice(i, i + 50)));
+      form.append("batch", JSON.stringify(chunk));
       form.append("include_headers", includeHeaders ? "true" : "false");
 
       const responses = await http.post<BatchSubResponse[]>("/", form);
-      const responseArray = Array.isArray(responses) ? responses : [];
-      allResponses.push(...responseArray);
+
+      for (let idx = 0; idx < responses.length; idx++) {
+        finalResponses.push(processResponse(chunk[idx]!, responses[idx]!));
+      }
     }
 
-    return allResponses.map(processResponse) as BatchResponses<T>;
+    return finalResponses as BatchResponses<T>;
   };
 
   return batch;
