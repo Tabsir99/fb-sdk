@@ -16,7 +16,7 @@ function createMockHttp(responseData: unknown): HttpClient {
 
 describe("InsightResource", () => {
   describe("numeric metrics", () => {
-    it("produces { series, total } for numeric values", async () => {
+    it("produces { timeSeries, total } for numeric values", async () => {
       const http = createMockHttp({
         data: [
           {
@@ -32,21 +32,21 @@ describe("InsightResource", () => {
       const result = await resource.list({ fields: { pageFollows: true } });
 
       expect(result.pageFollows.total).toBe(30);
-      expect(result.pageFollows.series).toHaveLength(2);
-      expect(result.pageFollows.series[0]!.value).toBe(10);
-      expect(result.pageFollows.series[1]!.value).toBe(20);
+      expect(result.pageFollows.timeSeries).toHaveLength(2);
+      expect(result.pageFollows.timeSeries[0]!.value).toBe(10);
+      expect(result.pageFollows.timeSeries[1]!.value).toBe(20);
     });
   });
 
   describe("record metrics", () => {
-    it("produces { series, snapshot } for record values", async () => {
-      const cityData = { "New York": 100, "London": 50 };
+    it("produces { timeSeries, snapshot } for record values", async () => {
+      const cityData = { "New York": 100, London: 50 };
       const http = createMockHttp({
         data: [
           {
             name: "page_fans_city",
             values: [
-              { value: { "New York": 80, "London": 40 }, endTime: "2024-01-01T00:00:00Z" },
+              { value: { "New York": 80, London: 40 }, endTime: "2024-01-01T00:00:00Z" },
               { value: cityData, endTime: "2024-01-02T00:00:00Z" },
             ],
           },
@@ -56,7 +56,7 @@ describe("InsightResource", () => {
       const result = await resource.list({ fields: { pageFansCity: true } });
 
       expect(result.pageFansCity.snapshot).toEqual(cityData);
-      expect(result.pageFansCity.series).toHaveLength(2);
+      expect(result.pageFansCity.timeSeries).toHaveLength(2);
     });
   });
 
@@ -75,7 +75,7 @@ describe("InsightResource", () => {
       const resource = createPageInsightResource({ http, id: "page1" });
       const result = await resource.list({ fields: { contentMonetizationEarnings: true } });
 
-      expect(result.contentMonetizationEarnings.series[0]!.value).toBe(1500000);
+      expect(result.contentMonetizationEarnings.timeSeries[0]!.value).toBe(1500000);
       expect(result.contentMonetizationEarnings.total).toBe(1500000);
     });
   });
@@ -94,7 +94,7 @@ describe("InsightResource", () => {
       const resource = createPageInsightResource({ http, id: "page1" });
       const result = await resource.list({ fields: { pageFollows: true } });
 
-      expect(result.pageFollows.series[0]!.endTime).toBe(new Date(isoDate).getTime());
+      expect(result.pageFollows.timeSeries[0]!.endTime).toBe(new Date(isoDate).getTime());
     });
 
     it("defaults to Date.now() when endTime is absent", async () => {
@@ -112,7 +112,7 @@ describe("InsightResource", () => {
       const resource = createPageInsightResource({ http, id: "page1" });
       const result = await resource.list({ fields: { pageFollows: true } });
 
-      expect(result.pageFollows.series[0]!.endTime).toBe(mockNow);
+      expect(result.pageFollows.timeSeries[0]!.endTime).toBe(mockNow);
       vi.restoreAllMocks();
     });
   });

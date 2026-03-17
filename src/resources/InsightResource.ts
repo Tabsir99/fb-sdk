@@ -31,7 +31,7 @@ const createInsightResource = <TMetrics>(http: HttpClient, id: string) => {
 
         for (const entry of res.data) {
           const name = toCamel(entry.name) as keyof Result;
-          const series = entry.values.map((v) => ({
+          const timeSeries = entry.values.map((v) => ({
             value:
               v.value instanceof Object && "microAmount" in v.value
                 ? Number(v.value.microAmount)
@@ -39,15 +39,15 @@ const createInsightResource = <TMetrics>(http: HttpClient, id: string) => {
             endTime: v.endTime ? new Date(v.endTime).getTime() : Date.now(),
           }));
 
-          if (typeof series[0]?.value === "number") {
+          if (typeof timeSeries[0]?.value === "number") {
             result[name] = {
-              series,
-              total: series.reduce((sum, v) => sum + (v.value as number), 0),
+              timeSeries,
+              total: timeSeries.reduce((sum, v) => sum + (v.value as number), 0),
             } as Result[typeof name];
           } else {
             result[name] = {
-              series,
-              snapshot: series[series.length - 1]?.value,
+              timeSeries,
+              snapshot: timeSeries[timeSeries.length - 1]?.value,
             } as Result[typeof name];
           }
         }

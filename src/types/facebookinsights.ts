@@ -177,12 +177,12 @@ export interface InsightValue<V> {
 }
 
 export interface NumericInsightResult {
-  series: InsightValue<number>[];
+  timeSeries: InsightValue<number>[];
   total: number;
 }
 
 export interface RecordInsightResult<V extends Record<string, number>> {
-  series: InsightValue<V>[];
+  timeSeries: InsightValue<V>[];
   snapshot: V;
 }
 
