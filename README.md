@@ -1,76 +1,335 @@
 # @tabsircg/fb-sdk
 
-A strongly-typed, modern TypeScript SDK for the Facebook Graph API (v25.0). It provides a fluent, resource-based interface with automatic `camelCase` ↔ `snake_case` transformation, seamless request batching, and an advanced type-safe field selector system that mimics GraphQL.
+A small, strongly-typed Facebook Graph API SDK for Node.js.
 
-## Tech Stack
-- **TypeScript** (v5.9.3) - Core language and advanced type system
-- **Axios** (v1.13.6) - HTTP client for interacting with the Graph API
-- **form-data** (v4.0.5) - For handling multipart/form-data (used in batching and media uploads)
-- **dotenv** (v17.3.1) - Environment variable management
-- **tsx** (v4.21.0) - For rapid development and execution of TypeScript files
+It started as the Facebook layer for a scheduling tool (Scheduly) and was extracted as a standalone package. The goal is a thin, predictable wrapper around the Graph API — not a kitchen-sink client. **It currently covers a focused subset of the Graph API.** More surface area will land over time; see [Coverage](#coverage).
 
-## Environment Variables
+> Status: early. The published version is `1.2.x`. The public shape (resource factories, `BatchableRequest`, field selectors) is stable enough to use, but minor versions may still tighten types.
 
-No required environment variables are hardcoded into the SDK itself. However, to interact with the Facebook Graph API, you must supply a valid Access Token when initializing the client wrapper. 
+---
 
-For development (`npm run dev`), you likely need to configure your `.env` file with a token to test against `src/temp/test.ts` (though `dotenv` usage is up to the consumer).
+## Highlights
 
-## Scripts
+- **Declarative field selection, fully typed.** The shape you await is exactly the shape you asked for — no `any`, no over-fetching, no manual type narrowing.
+- **One primitive: `BatchableRequest<T>`.** Every Graph call returns a thenable that doubles as a batch sub-request. The same value can be `await`-ed directly or passed into `sdk.batch([...])`.
+- **Automatic camelCase ↔ snake_case** at both runtime and type level. You write `createdTime`, the API sees `created_time`, you await `createdTime` again.
+- **Native batch API** with automatic chunking past Facebook's 50-request limit.
+- **First-class webhook + store.** A page-feed webhook handler plus an in-memory and a Redis store, used for efficient comment fan-out across many posts.
+- **Async upload helpers** for videos, reels, and images — including the 3-phase reel upload session, status polling, and 504 recovery.
 
-| Command | Description |
-| :--- | :--- |
-| `npm run build` | Compiles the TypeScript source code to JavaScript ES2022 format inside the `dist/` directory. |
-| `npm run dev` | Runs the scratchpad/test file located at `src/temp/test.ts` using `tsx`. Useful for local testing. |
-| `npm run prepublishOnly` | Automatically runs `npm run build` prior to publishing the package to npm. |
+---
 
-## Quick Start
+## Install
 
-```typescript
-import { createFbSdk } from '@tabsircg/fb-sdk';
-
-// 1. Initialize the SDK factory (optionally pass configuration like a Store)
-const sdkFactory = createFbSdk();
-
-// 2. Instantiate the client with a Page or User Access Token
-const sdk = sdkFactory("EAAGYourAccessTokenHere...");
-
-async function run() {
-  // Fetch a page's recent posts, selecting specific fields
-  const posts = await sdk.page("PAGE_ID").posts.list({
-    fields: {
-      id: true,
-      message: true,
-      createdTime: true
-    },
-    options: {
-      limit: 5
-    }
-  });
-
-  console.log("Recent posts:", posts.data);
-
-  // Example: Publish a new image
-  const publishTarget = await sdk.page("PAGE_ID").images.publish({
-    url: "https://example.com/image.png",
-    message: "Hello world!"
-  });
-  
-  console.log("Published Post ID:", publishTarget.postId);
-}
-
-run().catch(console.error);
+```bash
+npm install @tabsircg/fb-sdk
+# or
+pnpm add @tabsircg/fb-sdk
 ```
 
-## Common Errors & Fixes
+Node 18+ recommended (the package is ESM and ships native ESM output).
 
-**FacebookUploadError**
-- *Symptom:* The SDK throws an error during a video or reel upload, typically containing a `FacebookMedia["status"]` payload.
-- *Fix:* This is an asynchronous processing error on Facebook's side. The SDK polls the status of uploads. Inspect the error message (extracted via `getProcessingError` in `poller.ts`) which might indicate unsupported codecs, file size limits exceeded, or temporary Facebook outages.
+The SDK pins **Graph API v25.0**.
 
-**Batching Issues ("API Error code 2/3")**
-- *Symptom:* `sdk.batch([ ...requests ])` fails with a confusing Graph API error.
-- *Fix:* Ensure all requests inside the batch call were invoked without `await`. A `BatchableRequest` triggers a standard HTTP call if awaited, but returns `{ method, relative_url }` otherwise which the `batch` method leverages.
+---
 
-**Type errors on `fields` selector**
-- *Symptom:* TypeScript complains when selecting nested fields like `comments: { ... }`.
-- *Fix:* Verify that the nested property is defined as an object or `CollectionOf<T>` in the type definitions (`src/types/`). Ensure you use the exact camelCase keys for fields (e.g., `createdTime` instead of `created_time`).
+## Quick start
+
+```ts
+import { createFbSdk } from "@tabsircg/fb-sdk";
+
+const sdk = createFbSdk()(process.env.FB_ACCESS_TOKEN!);
+
+// Fetch the current user (the token's owner)
+const me = await sdk.me.get({ id: true, name: true, picture: true });
+//    ^? { id: string; name: string; picture: { data: PictureData } }
+
+// List the pages the user manages
+const pages = await sdk.me.accounts({
+  fields: { id: true, name: true, accessToken: true },
+});
+
+// Fetch a single post with nested comments and reactions
+const post = await sdk.post("123_456").get({
+  id: true,
+  message: true,
+  reactions: { summary: true },
+  comments: {
+    fields: { id: true, message: true, from: { id: true, name: true } },
+    options: { limit: 25 },
+  },
+});
+
+// Update a comment
+await sdk.comment("789").update({ message: "edited" });
+```
+
+Every call above is a `BatchableRequest<T>`. Each can be `await`-ed directly, *or* you can drop them into a batch:
+
+```ts
+const [postRes, commentsRes] = await sdk.batch([
+  sdk.post("123_456").get({ id: true, message: true }),
+  sdk.page("me").comments.list({ fields: { id: true, message: true } }),
+]);
+
+if (postRes.status === 200) {
+  console.log(postRes.data.message);
+}
+```
+
+---
+
+## Coverage
+
+What ships today:
+
+| Area      | Resource                                    | Operations                                                          |
+| --------- | ------------------------------------------- | ------------------------------------------------------------------- |
+| User      | `sdk.me`                                    | `get`, `accounts` (list managed pages)                              |
+| Page      | `sdk.page(id).posts`                        | `list`                                                              |
+| Page      | `sdk.page(id).videos` / `.reels`            | `list`, `publish` (with thumbnail + status polling)                 |
+| Page      | `sdk.page(id).images`                       | `publish`                                                           |
+| Page      | `sdk.page(id).comments`                     | `list` — aggregated across recent posts, store-accelerated          |
+| Page/Post | `.insights`                                 | `list` — typed metrics → `{ timeSeries, total \| snapshot }`        |
+| Post      | `sdk.post(id)`                              | `get`, `expire`, `comments`, `insights`                             |
+| Comment   | `sdk.comment(id)`                           | `get`, `update`, `delete`, `like`, `unlike`, `reply`, `replies`     |
+| Batch     | `sdk.batch`                                 | Up to 50 per request, auto-chunked                                  |
+| Webhook   | `createWebhookHandler`                      | `handleVerify`, `handleEvent` (signature-verified, store-recording) |
+| Stores    | `createMemoryStore`, `createRedisStore`     | In-process and Redis sorted-set backed                              |
+
+Not covered yet: ads, business management, leadgen retrieval, messenger, marketing API, instagram, app events. PRs welcome — see [Contributing](#contributing).
+
+---
+
+## Core concepts
+
+### 1. Field selectors
+
+Instead of building a Graph `fields=...` string by hand, you describe the shape you want as a plain object:
+
+```ts
+const post = await sdk.post("123").get({
+  id: true,
+  message: true,
+  comments: {
+    fields: { id: true, message: true },
+    options: { limit: 10, order: ORDER.NEWEST },
+  },
+});
+```
+
+- Leaves are `true`.
+- Plain object children (`{ summary: true }`) descend into nested fields.
+- **Collection** fields use `{ fields, options? }`. `options` becomes Graph's `.limit(N).order(...)` syntax.
+- Unknown keys are rejected at compile time. Selecting `id` does not give you `message` in the result type.
+
+The selector is converted to a Graph string by [`toGraphFields`](src/internal/utils.ts):
+
+```
+{ id: true, comments: { fields: { id: true }, options: { limit: 5 } } }
+→  "id,comments.limit(5){id}"
+```
+
+See [docs/type-system.md](docs/type-system.md) for the recursive types behind this (`FbFieldSelector`, `FbPickDeep`, `DeepStrict`, `Fields`).
+
+### 2. `BatchableRequest<T>` — one value, two uses
+
+Every method on a resource returns a `BatchableRequest<T>`. It carries:
+
+- `method` and `relative_url` — what the FB batch API needs to embed it in a batch.
+- `then` / `catch` — so `await req` Just Works.
+- `transform(fn)` — map the response in a way that survives batching.
+
+```ts
+const idOnly = sdk.post("123").get({ id: true }).transform((p) => p.id);
+//    ^? BatchableRequest<string>
+
+const id = await idOnly;                  // works
+const [{ data: id2 }] = await sdk.batch([idOnly]);  // also works
+```
+
+`transform` is the trick that makes `sdk.batch([...])` return typed, post-processed data — the same transform runs in both code paths. See [docs/batching.md](docs/batching.md).
+
+### 3. camelCase everywhere
+
+The SDK does case conversion in both directions, at both the runtime and the type level:
+
+- Outgoing params and bodies: `toSnakeObj` / `toSnakeFormData` / `toSnakeCase` convert your camelCase keys before they hit the wire.
+- Incoming responses: `toCamel` rewrites all keys recursively. The axios instance applies it as a global response transform.
+- At the type level: `KeysToCamel<T>` and `KeysToSnake<T>` recursively transform key strings using template literal types, so `FacebookPostRaw` (snake) and `FacebookPost` (camel) stay in sync from a single source of truth.
+
+```ts
+// You write:
+sdk.page("me").posts.list({ fields: { id: true, createdTime: true } });
+// Wire sees: fields=id,created_time
+// You await: { data: { id: string; createdTime: string }[]; paging: ... }
+```
+
+Keys starting with `_` are preserved by `KeysToCamel` (used for internal type-level markers like `_edgeOptions`).
+
+### 4. Batching
+
+```ts
+const results = await sdk.batch([
+  sdk.post("a").get({ id: true }),
+  sdk.post("b").get({ id: true, message: true }),
+  sdk.comment("c").like(),
+]);
+
+// results is a tuple matching input order:
+// [
+//   { status: 200; data: { id: string } },
+//   { status: 200; data: { id: string; message: string } },
+//   { status: 200; data: LikeCommentResponse },
+// ]
+```
+
+- Up to 50 requests per HTTP call. Larger arrays are chunked transparently.
+- Each result is `{ status, data }`. Non-200 responses leave `data` as the raw body string.
+- `includeHeaders` is opt-in.
+
+### 5. Page-level comment fan-out
+
+The `sdk.page(id).comments.list(...)` resource is the one place the SDK does something more than a 1:1 Graph call — it aggregates comments across multiple posts. There are two modes:
+
+- **Store-backed** (recommended): pass a `Store` in `createFbSdk({ store })` and run the webhook handler. The store remembers which posts had recent comment activity; `list({ options: { since } })` only fetches comments from those posts.
+- **On-demand**: no store. The SDK pulls the latest 50 posts on the page and fans out comments across them.
+
+Pagination uses a base64url-encoded cursor that bundles per-post cursors so the caller sees a single opaque `after` token. See [docs/webhooks-and-stores.md](docs/webhooks-and-stores.md).
+
+---
+
+## Webhooks
+
+```ts
+import express from "express";
+import {
+  createFbSdk,
+  createMemoryStore,
+  createWebhookHandler,
+} from "@tabsircg/fb-sdk";
+
+const store = createMemoryStore();
+
+const sdk = createFbSdk({ store });
+
+const webhook = createWebhookHandler({
+  store,
+  verifyToken: process.env.FB_VERIFY_TOKEN!,
+  appSecret: process.env.FB_APP_SECRET!,
+});
+
+const app = express();
+app.use(express.json({ verify: (req, _res, buf) => ((req as any).rawBody = buf) }));
+
+app.get("/webhook", webhook.handleVerify);
+app.post("/webhook", webhook.handleEvent);
+```
+
+The handler:
+
+- Verifies the `X-Hub-Signature-256` HMAC against `appSecret`.
+- Responds `200` immediately (FB will retry otherwise) and processes the payload in the background.
+- For `feed` changes of type `comment` with verb `add`, calls `store.recordActivity(pageId, postId, time)`.
+
+Then your reader uses the same store:
+
+```ts
+// Only hits posts that had comments after `since`
+const comments = await sdk.page(pageId).comments.list({
+  fields: {
+    id: true,
+    message: true,
+    post: { id: true, message: true, picture: true },
+  },
+  options: { since: Date.now() - 24 * 60 * 60 * 1000 },
+});
+```
+
+For multi-process deployments use the Redis store:
+
+```ts
+import Redis from "ioredis";
+import { createRedisStore } from "@tabsircg/fb-sdk";
+
+const redis = new Redis(process.env.REDIS_URL!);
+const store = createRedisStore(redis);
+```
+
+`createRedisStore` accepts anything matching the `RedisLike` interface — `ioredis`, `node-redis` v4 with a thin adapter, or your own mock.
+
+---
+
+## Project layout
+
+```
+src/
+├── client.ts              Public entry — createFbSdk + re-exports
+├── httpClient.ts          Axios wrapper, request → BatchableRequest
+├── internal/
+│   ├── batchable.ts       createBatchableRequest, buildRelativeUrl
+│   ├── fetchers.ts        Page-level comment aggregator
+│   ├── poller.ts          poll() + pollVideoStatus / pollReelStatus
+│   ├── error.ts           FacebookUploadError
+│   └── utils.ts           toGraphFields (selector → Graph string)
+├── lib/
+│   └── transformCase.ts   toCamel / toSnake + KeysToCamel / KeysToSnake types
+├── resources/
+│   ├── PageResource.ts    videos, reels, images, posts (page sub-resources)
+│   ├── PostResource.ts    Single post, plus media node
+│   ├── UserResource.ts    /me, /me/accounts
+│   ├── InsightResource.ts Page + post insights with typed metric maps
+│   ├── createBatchResource.ts   batch([...]) with 50-chunking
+│   └── comment/
+│       ├── CommentResource.ts        Single-comment CRUD + reply
+│       └── PageCommentResouorce.ts   Cross-post aggregation
+├── store/
+│   ├── types.ts           Store interface
+│   ├── memory.ts          createMemoryStore
+│   └── redis.ts           createRedisStore + RedisLike interface
+├── webhook/
+│   └── handler.ts         createWebhookHandler
+└── types/
+    ├── shared.ts          FbFieldSelector, FbPickDeep, DeepStrict, BatchableRequest
+    ├── facebookpost.ts    FacebookPost / Comment / write-op params
+    ├── facebookpage.ts    FacebookPage
+    ├── facebookuser.ts    FacebookUser
+    ├── facebookmedia.ts   FacebookMedia + publish params
+    ├── facebookinsights.ts Page/Post metric maps, InsightResult shapes
+    └── webhook.ts         WebhookPayload discriminated unions
+
+tests/
+├── unit/                  vitest runtime tests
+└── types/                 expect-type compile-time tests (typecheck only)
+```
+
+---
+
+## Development
+
+```bash
+pnpm install
+pnpm test               # runs vitest (unit + typecheck)
+pnpm build              # runs tests, then tsc → dist/
+```
+
+- Unit tests: `tests/unit/*.test.ts` (vitest).
+- Type tests: `tests/types/*.test-d.ts` — typecheck only, using `expect-type`. They include `@ts-expect-error` markers to assert that invalid usages fail to compile.
+- `tsconfig.json` is on the strict end: `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature`, `strictNullChecks` all on.
+
+---
+
+## Contributing
+
+Bug reports, type-system gotchas, and PRs for missing Graph resources are all welcome. A few rough guidelines:
+
+- Mirror the existing resource shape: a `createXResource({ http, id, config? })` factory returning typed methods that each produce a `BatchableRequest<T>`.
+- Type the raw API shape as a `*Raw` interface (snake_case) and export the camelCase view as `KeysToCamel<*Raw>`. This is how every type stays in sync without duplication.
+- Add a unit test under `tests/unit/` for runtime behaviour and a `.test-d.ts` under `tests/types/` for the type surface — especially `@ts-expect-error` cases for what *shouldn't* compile.
+- Don't add retry / rate-limit logic without discussion. There's an early prototype commented out in `src/internal/error.ts`; the current direction is to leave retries to the caller.
+
+---
+
+## License
+
+ISC.
