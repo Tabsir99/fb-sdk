@@ -4,6 +4,7 @@ import type {
   AppUsage,
   BusinessUseCaseUsage,
   FacebookErrorCategory,
+  FacebookErrorContext,
   RateLimitUsage,
   RawFacebookError,
 } from "../types/facebookerror.js";
@@ -154,11 +155,12 @@ export type FacebookError = FacebookGraphErrorUnion | FacebookNetworkError;
 /**
  * Hook invoked after a response is received but before it is returned/thrown,
  * whenever an error is detected — for direct requests AND individual batch
- * sub-responses. Purely observational: it does not change what the SDK
- * throws/returns, and a handler that throws (or rejects) is ignored so it can
- * never mask the underlying error.
+ * sub-responses. Receives the typed {@link FacebookError} plus a
+ * {@link FacebookErrorContext} identifying which call failed. Purely
+ * observational: it does not change what the SDK throws/returns, and a handler
+ * that throws (or rejects) is ignored so it can never mask the underlying error.
  */
-export type FacebookErrorHook = (error: FacebookError) => void;
+export type FacebookErrorHook = (error: FacebookError, context: FacebookErrorContext) => void;
 
 /** Named constants for the curated, documented `code` values. `code` itself stays `number`. */
 export const FacebookErrorCode = {
@@ -330,9 +332,13 @@ export function toNetworkError(cause: unknown, httpStatus = 0): FacebookNetworkE
 }
 
 /** Invokes an error hook defensively: a throwing or rejecting handler is swallowed. */
-export function invokeErrorHook(hook: FacebookErrorHook, error: FacebookError): void {
+export function invokeErrorHook(
+  hook: FacebookErrorHook,
+  error: FacebookError,
+  context: FacebookErrorContext,
+): void {
   try {
-    const result = hook(error) as unknown;
+    const result = hook(error, context) as unknown;
     if (isObject(result) && typeof result["then"] === "function") {
       (result as unknown as PromiseLike<unknown>).then(undefined, () => {});
     }

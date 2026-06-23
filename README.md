@@ -271,10 +271,11 @@ Pass an `onError` hook to `createFbSdk`. It runs after a response is received bu
 import { createFbSdk } from "@tabsircg/fb-sdk";
 
 const sdk = createFbSdk({
-  onError: (err) => {
+  // `ctx` identifies the failing call: { method, relativeUrl, accessToken, source }
+  onError: (err, ctx) => {
     switch (err.category) {
-      case "auth": // token expired/revoked — re-authenticate
-        reauthenticate(err.code, err.subcode);
+      case "auth": // token expired/revoked — ctx.accessToken is the page/channel key
+        markChannelRevoked(ctx.accessToken);
         break;
       case "rate_limit": // back off; usage headers say roughly for how long
         logger.warn("throttled", err.usage?.appUsage);
@@ -283,13 +284,15 @@ const sdk = createFbSdk({
         metrics.increment("fb.network_error");
         break;
       default:
-        logger.warn({ code: err.code, trace: err.traceId }, err.message);
+        logger.warn({ trace: err.traceId, call: `${ctx.method} ${ctx.relativeUrl}` }, err.message);
     }
   },
 })(token);
 ```
 
-Error types and classes live at the **`@tabsircg/fb-sdk/errors`** subpath — kept off the main entry to keep it uncluttered. Inside the hook, `err` is inferred, so you often don't need to import anything.
+The hook receives two arguments: the typed error, and a `context` (`{ method, relativeUrl, accessToken, source }`) identifying *which* call failed. `accessToken` is the call's own token — for a multi-page app it's the unique key to the page/channel, so an `auth` error tells you exactly which channel to mark revoked. The second argument is optional to consume; `(err) => …` keeps working.
+
+Error types and classes live at the **`@tabsircg/fb-sdk/errors`** subpath — kept off the main entry to keep it uncluttered. Inside the hook, `err` and `ctx` are inferred, so you often don't need to import anything.
 
 The hook receives a strictly-typed `FacebookError` — a discriminated union you narrow on `.category`:
 

@@ -9,6 +9,7 @@ import {
   invokeErrorHook,
   type FacebookErrorHook,
 } from "./internal/error.js";
+import type { FacebookErrorContext } from "./types/facebookerror.js";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
@@ -46,19 +47,33 @@ export interface CreateHttpClientOptions {
 }
 
 // A thrown failure: prefer the Graph envelope on the response, else treat it as transport-level.
-function reportThrownError(error: unknown, onError: FacebookErrorHook): void {
+function reportThrownError(
+  error: unknown,
+  onError: FacebookErrorHook,
+  method: string,
+  relativeUrl: string,
+  accessToken: string,
+): void {
+  const context: FacebookErrorContext = { method, relativeUrl, accessToken, source: "request" };
   if (isAxiosError(error) && error.response) {
     const fbError = toFacebookError(error.response.data, error.response.status, error.response.headers);
-    invokeErrorHook(onError, fbError ?? toNetworkError(error, error.response.status));
+    invokeErrorHook(onError, fbError ?? toNetworkError(error, error.response.status), context);
   } else {
-    invokeErrorHook(onError, toNetworkError(error));
+    invokeErrorHook(onError, toNetworkError(error), context);
   }
 }
 
 // A 2xx body that nonetheless carries an `error` envelope (some endpoints do this).
-function reportResponseError(data: unknown, status: number, onError: FacebookErrorHook): void {
+function reportResponseError(
+  data: unknown,
+  status: number,
+  onError: FacebookErrorHook,
+  method: string,
+  relativeUrl: string,
+  accessToken: string,
+): void {
   const fbError = toFacebookError(data, status);
-  if (fbError) invokeErrorHook(onError, fbError);
+  if (fbError) invokeErrorHook(onError, fbError, { method, relativeUrl, accessToken, source: "request" });
 }
 
 export function createHttpClient(
@@ -70,23 +85,25 @@ export function createHttpClient(
   return {
     get: (path, reqOptions) => {
       const params = reqOptions?.params ?? {};
-      return createBatchableRequest("GET", buildRelativeUrl(path, params), async () => {
+      const relativeUrl = buildRelativeUrl(path, params);
+      return createBatchableRequest("GET", relativeUrl, async () => {
         try {
           // reqOptions is spread FIRST so the merged params (with access_token) always win.
           const res = await fbApi.get(path, {
             ...reqOptions,
             params: { access_token: accessToken, ...params },
           });
-          if (onError) reportResponseError(res.data, res.status, onError);
+          if (onError) reportResponseError(res.data, res.status, onError, "GET", relativeUrl, accessToken);
           return res.data;
         } catch (error) {
-          if (onError) reportThrownError(error, onError);
+          if (onError) reportThrownError(error, onError, "GET", relativeUrl, accessToken);
           throw error;
         }
       });
     },
     post: (path, data, reqOptions) => {
       const params = reqOptions?.params ?? {};
+      const relativeUrl = buildRelativeUrl(path, params);
       const isForm = data instanceof FormData;
       // Captured at construction so the request carries its body into sdk.batch([...]).
       // FormData bodies (media uploads) cannot be embedded in a batch.
@@ -95,7 +112,7 @@ export function createHttpClient(
 
       return createBatchableRequest(
         "POST",
-        buildRelativeUrl(path, params),
+        relativeUrl,
         async () => {
           try {
             const res = await fbApi.post(path, isForm ? data : toSnakeObj(data), {
@@ -103,10 +120,10 @@ export function createHttpClient(
               headers: { ...reqOptions?.headers, ...(isForm ? data.getHeaders() : {}) },
               params: { access_token: accessToken, ...params },
             });
-            if (onError) reportResponseError(res.data, res.status, onError);
+            if (onError) reportResponseError(res.data, res.status, onError, "POST", relativeUrl, accessToken);
             return res.data;
           } catch (error) {
-            if (onError) reportThrownError(error, onError);
+            if (onError) reportThrownError(error, onError, "POST", relativeUrl, accessToken);
             throw error;
           }
         },
@@ -116,16 +133,17 @@ export function createHttpClient(
     },
     delete: (path, reqOptions) => {
       const params = reqOptions?.params ?? {};
-      return createBatchableRequest("DELETE", buildRelativeUrl(path, params), async () => {
+      const relativeUrl = buildRelativeUrl(path, params);
+      return createBatchableRequest("DELETE", relativeUrl, async () => {
         try {
           const res = await fbApi.delete(path, {
             ...reqOptions,
             params: { access_token: accessToken, ...params },
           });
-          if (onError) reportResponseError(res.data, res.status, onError);
+          if (onError) reportResponseError(res.data, res.status, onError, "DELETE", relativeUrl, accessToken);
           return res.data;
         } catch (error) {
-          if (onError) reportThrownError(error, onError);
+          if (onError) reportThrownError(error, onError, "DELETE", relativeUrl, accessToken);
           throw error;
         }
       });

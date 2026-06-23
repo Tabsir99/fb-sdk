@@ -15,9 +15,10 @@ export interface FbSdkConfig {
   /**
    * Invoked after a response is received but before it is returned/thrown,
    * whenever an error is detected — on direct requests and on individual batch
-   * sub-responses. Receives a strictly-typed {@link FacebookError} (narrow on
-   * `.category`) with a `.raw` escape hatch. Observational: it never changes
-   * what the SDK throws/returns.
+   * sub-responses. Receives a strictly-typed `FacebookError` (narrow on
+   * `.category`, with a `.raw` escape hatch) and a context object identifying
+   * the failing call (`method`, `relativeUrl`, `accessToken`, `source`).
+   * Observational: it never changes what the SDK throws/returns.
    */
   onError?: FacebookErrorHook;
 }

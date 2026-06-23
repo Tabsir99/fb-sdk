@@ -31,6 +31,7 @@ export type {
 
 export type {
   FacebookErrorCategory,
+  FacebookErrorContext,
   RawFacebookError,
   RateLimitUsage,
   AppUsage,

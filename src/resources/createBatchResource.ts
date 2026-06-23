@@ -21,7 +21,12 @@ export interface CreateBatchResourceOptions {
 
 // A failed sub-response: its `body` is a stringified JSON envelope (or non-JSON
 // on transport failure); the outer batch call already succeeded with HTTP 200.
-function reportSubResponseError(res: BatchSubResponse, onError: FacebookErrorHook): void {
+function reportSubResponseError(
+  req: BatchSubRequest,
+  res: BatchSubResponse,
+  onError: FacebookErrorHook,
+  accessToken: string,
+): void {
   let fbError: FacebookError | null = null;
   if (res.body) {
     try {
@@ -33,6 +38,7 @@ function reportSubResponseError(res: BatchSubResponse, onError: FacebookErrorHoo
   invokeErrorHook(
     onError,
     fbError ?? toNetworkError(new Error(`Batch sub-request failed with status ${res.code}`), res.code),
+    { method: req.method, relativeUrl: req.relative_url, accessToken, source: "batch" },
   );
 }
 
@@ -53,6 +59,8 @@ const processResponse = (req: BatchSubRequest, res: BatchSubResponse) => {
 
 export function createBatchResource(http: HttpClient, options?: CreateBatchResourceOptions) {
   const onError = options?.onError;
+  // All sub-requests in a batch share the client's token (the batch's access_token).
+  const accessToken = onError ? http.getToken() : "";
 
   const batch = async <const T extends readonly BatchSubRequest[]>(
     requests: T,
@@ -71,6 +79,7 @@ export function createBatchResource(http: HttpClient, options?: CreateBatchResou
       const responses = await http.post<(BatchSubResponse | null)[]>("/", form);
 
       for (let idx = 0; idx < chunk.length; idx++) {
+        const req = chunk[idx]!;
         const res = responses[idx];
         if (!res) {
           // Facebook returns null for sub-requests that timed out within the batch.
@@ -78,13 +87,14 @@ export function createBatchResource(http: HttpClient, options?: CreateBatchResou
             invokeErrorHook(
               onError,
               toNetworkError(new Error("Batch sub-request did not complete (timed out)")),
+              { method: req.method, relativeUrl: req.relative_url, accessToken, source: "batch" },
             );
           }
           finalResponses.push({ status: 0, data: null });
           continue;
         }
-        if (onError && res.code >= 400) reportSubResponseError(res, onError);
-        finalResponses.push(processResponse(chunk[idx]!, res));
+        if (onError && res.code >= 400) reportSubResponseError(req, res, onError, accessToken);
+        finalResponses.push(processResponse(req, res));
       }
     }
 

@@ -3,6 +3,7 @@ import type {
   FacebookError,
   FacebookErrorHook,
   FacebookErrorCategory,
+  FacebookErrorContext,
   FacebookAuthError,
   FacebookRateLimitError,
   FacebookNetworkError,
@@ -41,5 +42,10 @@ err.usage;
 // 4. `raw` is always present as the escape hatch.
 expectTypeOf(err.raw).toEqualTypeOf<unknown>();
 
-// 5. The hook receives the full union.
-expectTypeOf<FacebookErrorHook>().toEqualTypeOf<(error: FacebookError) => void>();
+// 5. The hook receives the full union plus the call context.
+expectTypeOf<FacebookErrorHook>().toEqualTypeOf<
+  (error: FacebookError, context: FacebookErrorContext) => void
+>();
+
+// 6. `source` is a closed literal union — exhaustively switchable.
+expectTypeOf<FacebookErrorContext["source"]>().toEqualTypeOf<"request" | "batch">();

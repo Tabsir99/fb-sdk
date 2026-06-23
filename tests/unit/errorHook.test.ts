@@ -18,6 +18,7 @@ import {
   FacebookErrorCode,
   FacebookAuthSubcode,
   type FacebookError,
+  type FacebookErrorContext,
 } from "../../src/errors.js";
 
 /**
@@ -71,7 +72,7 @@ async function captureGetError(
   body: unknown,
   headers?: Record<string, string>,
 ): Promise<FacebookError> {
-  const onError = vi.fn<(e: FacebookError) => void>();
+  const onError = vi.fn<(e: FacebookError, ctx: FacebookErrorContext) => void>();
   const http = createHttpClient(TOKEN, { onError });
   await expect(
     http.get("/x", { adapter: adapterReturning(status, body, headers) }),
@@ -141,7 +142,7 @@ describe("onError hook — direct requests", () => {
   });
 
   it("re-throws the original error after reporting (observational only)", async () => {
-    const onError = vi.fn<(e: FacebookError) => void>();
+    const onError = vi.fn<(e: FacebookError, ctx: FacebookErrorContext) => void>();
     const http = createHttpClient(TOKEN, { onError });
     await expect(
       http.get("/x", {
@@ -151,7 +152,7 @@ describe("onError hook — direct requests", () => {
   });
 
   it("does not fire on a clean 2xx response", async () => {
-    const onError = vi.fn<(e: FacebookError) => void>();
+    const onError = vi.fn<(e: FacebookError, ctx: FacebookErrorContext) => void>();
     const http = createHttpClient(TOKEN, { onError });
     const data = await http.get("/x", { adapter: adapterReturning(200, { id: "1" }) });
     expect(data).toEqual({ id: "1" });
@@ -159,7 +160,7 @@ describe("onError hook — direct requests", () => {
   });
 
   it("fires on a 2xx body that nonetheless carries an error envelope", async () => {
-    const onError = vi.fn<(e: FacebookError) => void>();
+    const onError = vi.fn<(e: FacebookError, ctx: FacebookErrorContext) => void>();
     const http = createHttpClient(TOKEN, { onError });
     await http.get("/x", {
       adapter: adapterReturning(200, fbErrorBody({ message: "soft", type: "T", code: 100 })),
@@ -169,7 +170,7 @@ describe("onError hook — direct requests", () => {
   });
 
   it("reports POST failures too", async () => {
-    const onError = vi.fn<(e: FacebookError) => void>();
+    const onError = vi.fn<(e: FacebookError, ctx: FacebookErrorContext) => void>();
     const http = createHttpClient(TOKEN, { onError });
     await expect(
       http.post("/x", { message: "hi" }, {
@@ -188,6 +189,35 @@ describe("onError hook — direct requests", () => {
       }),
     ).rejects.toThrow();
     expect(errors[0]).toBeInstanceOf(FacebookAuthError);
+  });
+
+  it("passes a context identifying the failing call (token-free relativeUrl)", async () => {
+    const onError = vi.fn<(e: FacebookError, ctx: FacebookErrorContext) => void>();
+    const http = createHttpClient(TOKEN, { onError });
+    await expect(
+      http.get("/123/comments", {
+        params: { fields: "id" },
+        adapter: adapterReturning(400, fbErrorBody({ message: "x", type: "OAuthException", code: 190 })),
+      }),
+    ).rejects.toThrow();
+    expect(onError.mock.calls[0]![1]).toEqual({
+      method: "GET",
+      relativeUrl: "123/comments?fields=id",
+      accessToken: TOKEN,
+      source: "request",
+    });
+  });
+
+  it("carries each SDK instance's own token so multi-page apps can route the failure", async () => {
+    const seen: string[] = [];
+    const sdkA = createFbSdk({ onError: (_e, ctx) => seen.push(ctx.accessToken) })("token-A");
+    const sdkB = createFbSdk({ onError: (_e, ctx) => seen.push(ctx.accessToken) })("token-B");
+    const body = fbErrorBody({ message: "x", type: "OAuthException", code: 190 });
+
+    await expect(sdkA.http.get("/me", { adapter: adapterReturning(400, body) })).rejects.toThrow();
+    await expect(sdkB.http.get("/me", { adapter: adapterReturning(400, body) })).rejects.toThrow();
+
+    expect(seen).toEqual(["token-A", "token-B"]);
   });
 });
 
@@ -268,7 +298,7 @@ describe("onError hook — classification", () => {
 
 describe("onError hook — transport failures", () => {
   it("wraps a no-response failure as FacebookNetworkError", async () => {
-    const onError = vi.fn<(e: FacebookError) => void>();
+    const onError = vi.fn<(e: FacebookError, ctx: FacebookErrorContext) => void>();
     const http = createHttpClient(TOKEN, { onError });
     const cause = new Error("socket hang up");
 
@@ -283,7 +313,7 @@ describe("onError hook — transport failures", () => {
   });
 
   it("wraps a non-JSON error body (proxy HTML) as FacebookNetworkError", async () => {
-    const onError = vi.fn<(e: FacebookError) => void>();
+    const onError = vi.fn<(e: FacebookError, ctx: FacebookErrorContext) => void>();
     const http = createHttpClient(TOKEN, { onError });
     await expect(
       http.get("/x", { adapter: adapterReturning(502, "<html>bad gateway</html>") }),
@@ -328,7 +358,10 @@ describe("onError hook — handler safety", () => {
 });
 
 describe("onError hook — batch sub-responses", () => {
-  function batchWith(onError: (e: FacebookError) => void, subResponses: (BatchSubResponse | null)[]) {
+  function batchWith(
+    onError: (e: FacebookError, ctx: FacebookErrorContext) => void,
+    subResponses: (BatchSubResponse | null)[],
+  ) {
     const http = createHttpClient(TOKEN);
     const httpWithAdapter: typeof http = {
       ...http,
@@ -338,7 +371,7 @@ describe("onError hook — batch sub-responses", () => {
   }
 
   it("reports a failed sub-response and leaves the returned data untouched", async () => {
-    const onError = vi.fn<(e: FacebookError) => void>();
+    const onError = vi.fn<(e: FacebookError, ctx: FacebookErrorContext) => void>();
     const subResponses = [
       { code: 200, body: JSON.stringify({ id: "ok" }) },
       { code: 400, body: JSON.stringify({ error: { message: "bad", type: "OAuthException", code: 190 } }) },
@@ -361,7 +394,7 @@ describe("onError hook — batch sub-responses", () => {
   });
 
   it("reports a null (timed-out) sub-response as a network error", async () => {
-    const onError = vi.fn<(e: FacebookError) => void>();
+    const onError = vi.fn<(e: FacebookError, ctx: FacebookErrorContext) => void>();
     const batch = batchWith(onError, [{ code: 200, body: "{}" }, null]);
 
     const results = await batch([
@@ -375,9 +408,24 @@ describe("onError hook — batch sub-responses", () => {
   });
 
   it("does not fire when every sub-response succeeds", async () => {
-    const onError = vi.fn<(e: FacebookError) => void>();
+    const onError = vi.fn<(e: FacebookError, ctx: FacebookErrorContext) => void>();
     const batch = batchWith(onError, [{ code: 200, body: "{}" }]);
     await batch([{ method: "GET", relative_url: "a" }]);
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("tags batch failures with source 'batch' and the sub-request url", async () => {
+    const onError = vi.fn<(e: FacebookError, ctx: FacebookErrorContext) => void>();
+    const subResponses = [
+      { code: 400, body: JSON.stringify({ error: { message: "bad", type: "OAuthException", code: 190 } }) },
+    ];
+    const batch = batchWith(onError, subResponses);
+    await batch([{ method: "GET", relative_url: "123/comments" }]);
+    expect(onError.mock.calls[0]![1]).toEqual({
+      method: "GET",
+      relativeUrl: "123/comments",
+      accessToken: TOKEN,
+      source: "batch",
+    });
   });
 });

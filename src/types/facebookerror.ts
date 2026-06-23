@@ -79,3 +79,24 @@ export interface RateLimitUsage {
   appUsage?: AppUsage;
   businessUseCaseUsage?: Record<string, BusinessUseCaseUsage[]>;
 }
+
+/**
+ * Identifies the call that produced an error — the second argument to an
+ * error hook. Tells you *which* request failed (the error itself only says
+ * *what* went wrong).
+ */
+export interface FacebookErrorContext {
+  /** HTTP method of the failing call (`"GET"`, `"POST"`, `"DELETE"`). */
+  method: string;
+  /** Relative URL (path + query) of the failing call — the value embedded in a batch sub-request. */
+  relativeUrl: string;
+  /**
+   * The access token the failing call used. For multi-page apps this is the
+   * unique key to the page/channel the request belongs to — e.g. to mark that
+   * channel revoked on an `auth` error. (It's also on the thrown AxiosError's
+   * `config.params`; surfaced here for convenience.)
+   */
+  accessToken: string;
+  /** Whether the failure came from a direct request or a batch sub-response. */
+  source: "request" | "batch";
+}
