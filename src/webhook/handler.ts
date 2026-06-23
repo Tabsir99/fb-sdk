@@ -1,6 +1,6 @@
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import type { Store } from "../store/types.js";
-import { WebhookPayload } from "../types/webhook.js";
+import { type WebhookPayload } from "../types/webhook.js";
 
 // ─── Webhook Payload Types ───
 
@@ -26,6 +26,12 @@ export interface WebhookHandlerConfig {
   store: Store;
   verifyToken: string;
   appSecret: string;
+  /**
+   * Called for failures during background processing (store writes, malformed
+   * entries) — these happen after the 200 response and would otherwise be
+   * unhandled rejections. Defaults to swallowing silently.
+   */
+  onError?: (error: unknown) => void;
 }
 
 function verifySignature(
@@ -35,7 +41,9 @@ function verifySignature(
 ): boolean {
   if (!signature) return false;
   const expected = "sha256=" + createHmac("sha256", appSecret).update(rawBody).digest("hex");
-  return signature === expected;
+  const received = Buffer.from(signature);
+  const wanted = Buffer.from(expected);
+  return received.length === wanted.length && timingSafeEqual(received, wanted);
 }
 
 /**
@@ -43,7 +51,7 @@ function verifySignature(
  * and records comment activity in a CommentStore.
  */
 export function createWebhookHandler(config: WebhookHandlerConfig) {
-  const { store, verifyToken, appSecret } = config;
+  const { store, verifyToken, appSecret, onError } = config;
 
   const handleVerify = (req: VerifyRequest, res: Response) => {
     const mode = req.query["hub.mode"];
@@ -72,24 +80,33 @@ export function createWebhookHandler(config: WebhookHandlerConfig) {
     // Respond 200 immediately — Facebook requires fast response
     res.status(200).send("EVENT_RECEIVED");
 
-    // Process entries in background
-    const payload = req.body;
-    if (payload.object !== "page") return;
+    // Process entries in background. The response is already sent, so nothing
+    // here may throw out of the handler — report via onError instead.
+    try {
+      const payload = req.body;
+      if (payload.object !== "page") return;
 
-    const promises: Promise<void>[] = [];
+      const writes: Promise<void>[] = [];
 
-    for (const entry of payload.entry) {
-      const pageId = entry.id;
-      for (const change of entry.changes) {
-        if (change.field !== "feed") continue;
-        const { value } = change;
-        if (value.item === "comment" && value.verb === "add" && value.post_id) {
-          promises.push(store.recordActivity(pageId, value.post_id, value.created_time));
+      for (const entry of payload.entry ?? []) {
+        const pageId = entry.id;
+        // Entries from other subscription types (e.g. messaging) have no changes array.
+        for (const change of entry.changes ?? []) {
+          if (change.field !== "feed") continue;
+          const { value } = change;
+          if (value.item === "comment" && value.verb === "add" && value.post_id) {
+            writes.push(store.recordActivity(pageId, value.post_id, value.created_time));
+          }
         }
       }
-    }
 
-    await Promise.all(promises);
+      const results = await Promise.allSettled(writes);
+      for (const result of results) {
+        if (result.status === "rejected") onError?.(result.reason);
+      }
+    } catch (error) {
+      onError?.(error);
+    }
   };
 
   return { handleVerify, handleEvent };

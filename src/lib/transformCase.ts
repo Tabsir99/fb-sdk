@@ -10,8 +10,8 @@ export type KeysToCamel<T> = T extends (infer U)[]
     ? { [K in keyof T as K extends `_${string}` ? K : SnakeToCamel<string & K>]: KeysToCamel<T[K]> }
     : T;
 
+// Transforms KEYS only — string values (message text, cursors, URLs) pass through untouched.
 export function toCamel<T>(obj: T): KeysToCamel<T> {
-  if (typeof obj === "string") return toCamelCase(obj) as any;
   if (Array.isArray(obj)) return obj.map(toCamel) as KeysToCamel<T>;
   if (obj && typeof obj === "object") {
     return Object.fromEntries(
@@ -40,8 +40,8 @@ export function toCamelCase(str: string): string {
   return str.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }
 
+// Transforms KEYS only — string values pass through untouched.
 export function toSnakeObj<T>(obj: T): KeysToSnake<T> {
-  if (typeof obj === "string") return toSnakeCase(obj) as KeysToSnake<T>;
   if (Array.isArray(obj)) return obj.map(toSnakeObj) as KeysToSnake<T>;
   if (obj && typeof obj === "object") {
     return Object.fromEntries(
@@ -56,12 +56,16 @@ export function toSnakeFormData(data: Record<string, any>): FormData {
   for (const [key, value] of Object.entries(data)) {
     if (value == null || value === "") continue;
 
-    form.append(
-      toSnakeCase(key),
+    // form-data only accepts strings, Buffers, and streams — plain objects are
+    // JSON-encoded (Graph API convention) and booleans stringified ("true"/"false").
+    const serialized =
       typeof value === "object" && !(value instanceof Buffer) && !value.pipe
         ? JSON.stringify(toSnakeObj(value))
-        : value,
-    );
+        : typeof value === "boolean"
+          ? String(value)
+          : value;
+
+    form.append(toSnakeCase(key), serialized);
   }
   return form;
 }

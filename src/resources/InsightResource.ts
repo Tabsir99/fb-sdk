@@ -1,16 +1,16 @@
 import {
-  CreateResourceParams,
-  InsightQuery,
-  InsightResponse,
-  PageInsightMetrics,
-  PostInsightMetrics,
+  type CreateResourceParams,
+  type InsightQuery,
+  type InsightResponse,
+  type PageInsightMetrics,
+  type PostInsightMetrics,
 } from "../client.js";
-import { HttpClient } from "../httpClient.js";
+import { type HttpClient } from "../httpClient.js";
 
 import { toGraphFields } from "../internal/utils.js";
-import { toCamel, toSnakeObj } from "../lib/transformCase.js";
-import { BatchableRequest, FbFieldSelector } from "../types/shared.js";
-import { InsightRawResponseCamelCase } from "../types/facebookinsights.js";
+import { toCamelCase, toSnakeObj } from "../lib/transformCase.js";
+import { type BatchableRequest, type FbFieldSelector } from "../types/shared.js";
+import { type InsightRawResponseCamelCase } from "../types/facebookinsights.js";
 
 const createInsightResource = <TMetrics>(http: HttpClient, id: string) => {
   const list = <F extends FbFieldSelector<TMetrics>>(
@@ -30,7 +30,7 @@ const createInsightResource = <TMetrics>(http: HttpClient, id: string) => {
         const result = {} as Result;
 
         for (const entry of res.data) {
-          const name = toCamel(entry.name) as keyof Result;
+          const name = toCamelCase(entry.name) as keyof Result;
           const timeSeries = entry.values.map((v) => ({
             value:
               v.value instanceof Object && "microAmount" in v.value

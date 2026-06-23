@@ -7,7 +7,7 @@ This doc covers:
 - The webhook handler — what it verifies, what it records.
 - How `sdk.page(id).comments.list(...)` uses the store to avoid scanning all posts.
 
-Files: [`src/store/`](../src/store/), [`src/webhook/handler.ts`](../src/webhook/handler.ts), [`src/resources/comment/PageCommentResouorce.ts`](../src/resources/comment/PageCommentResouorce.ts).
+Files: [`src/store/`](../src/store/), [`src/webhook/handler.ts`](../src/webhook/handler.ts), [`src/resources/comment/PageCommentResource.ts`](../src/resources/comment/PageCommentResource.ts).
 
 ---
 
@@ -31,26 +31,28 @@ The `recordActivity` implementation only writes when the new timestamp is newer 
 
 ### `createRedisStore(client)`
 
-Backed by Redis sorted sets, one key per page (`fb:comments:{pageId}`). Members are post IDs, scores are timestamps. The two reads map to native Redis commands:
+Backed by Redis sorted sets, one key per page (`fb:comments:{pageId}`). Members are post IDs, scores are timestamps. The operations map to native Redis commands:
 
 | Method            | Redis command                                                      |
 | ----------------- | ------------------------------------------------------------------ |
-| `recordActivity`  | `ZADD fb:comments:{pageId} <time> <postId>`                        |
+| `recordActivity`  | `ZADD fb:comments:{pageId} GT <time> <postId>`                     |
 | `getActivePosts`  | `ZRANGEBYSCORE fb:comments:{pageId} <since> +inf`                  |
 | `cleanup`         | `KEYS fb:comments:*` + `ZREMRANGEBYSCORE … -inf <olderThan>`       |
+
+The `GT` flag gives the Redis store the same out-of-order semantics as the memory store — a delivery with an older timestamp can never move a post's last-activity time backwards. **It requires Redis ≥ 6.2.**
 
 The store doesn't import any specific Redis client. Instead, it accepts a `RedisLike` object:
 
 ```ts
 export interface RedisLike {
-  zadd(key: string, score: number, member: string): Promise<number>;
+  zadd(key: string, ...args: (string | number)[]): Promise<number>;
   zrangebyscore(key: string, min: number | string, max: number | string): Promise<string[]>;
   zremrangebyscore(key: string, min: number | string, max: number | string): Promise<number>;
   keys(pattern: string): Promise<string[]>;
 }
 ```
 
-Both `ioredis` and a thin adapter over `node-redis` v4 fit this shape. Mocks for tests are trivial.
+`zadd` is variadic so flags like `GT` can be passed through — `ioredis` matches this shape directly; a thin adapter covers `node-redis` v4. Mocks for tests are trivial.
 
 > **A note on `cleanup`'s `KEYS`** — `KEYS` is fine on small fleets but blocks Redis on large keyspaces. If you have thousands of active pages, replace it with `SCAN` in your own adapter, or drive cleanup with a separate index of active page IDs.
 
@@ -63,6 +65,9 @@ const webhook = createWebhookHandler({
   store,
   verifyToken: process.env.FB_VERIFY_TOKEN!,
   appSecret: process.env.FB_APP_SECRET!,
+  // optional — background failures (store writes) land here instead of
+  // becoming unhandled rejections after the 200 was already sent
+  onError: (err) => console.error("webhook processing failed", err),
 });
 
 app.get("/webhook", webhook.handleVerify);
@@ -75,10 +80,10 @@ Implements Facebook's subscribe-token handshake. Returns `200 <challenge>` when 
 
 ### `handleEvent` (POST)
 
-1. **Verifies signature.** Reads `X-Hub-Signature-256` and recomputes `sha256 = HMAC-SHA256(rawBody, appSecret)` to compare against. If signature is missing or mismatched, returns `403` and stops.
+1. **Verifies signature.** Reads `X-Hub-Signature-256` and recomputes `sha256 = HMAC-SHA256(rawBody, appSecret)`, comparing with `crypto.timingSafeEqual`. If signature is missing or mismatched, returns `403` and stops.
 2. **Responds 200 immediately.** Facebook expects sub-second responses or it retries — heavy work runs *after* `res.send`.
-3. **Walks `payload.entry[].changes[]`.** For every change of `field === "feed"` where `value.item === "comment"`, `value.verb === "add"`, and `value.post_id` is present, calls `store.recordActivity(pageId, post_id, value.created_time)`.
-4. **Awaits all recorded activities in parallel** before resolving the handler.
+3. **Walks `payload.entry[].changes[]`.** Entries without a `changes` array (other subscription types, e.g. messaging) are skipped. For every change of `field === "feed"` where `value.item === "comment"`, `value.verb === "add"`, and `value.post_id` is present, calls `store.recordActivity(pageId, post_id, value.created_time)`.
+4. **Settles all store writes** before resolving. Failures never escape the handler — each rejected write is reported through `onError` (if configured) and otherwise swallowed, because the HTTP response is already gone.
 
 The framework is unopinionated about which web library you use. The handler takes a minimal `{ status, send }`-shaped response and `{ query, headers, body, rawBody }`-shaped request — any of express, fastify, hono, etc., fit.
 
@@ -118,7 +123,7 @@ The resource has three modes, depending on what you pass in:
 | ----------------------------------------- | ------------------------------------------------------------------ |
 | `options.after` (cursor from prior call)  | Continue paging with that cursor.                                  |
 | `config.store` + `options.since`          | **Store-accelerated** — only fetch comments from active posts.     |
-| neither of the above                      | **On-demand** — list the most recent 50 posts and fan out.         |
+| neither of the above                      | **On-demand** — list the most recent posts and fan out (`postsLimit` in `createFbSdk` config; default 50, max 100). |
 
 In all three modes, it then calls [`fetchComments`](../src/internal/fetchers.ts), which uses `sdk.batch([...])` to fetch comments from each post in parallel (1 HTTP request per 50 posts).
 

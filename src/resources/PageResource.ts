@@ -1,25 +1,25 @@
 import { api } from "../httpClient.js";
 import {
-  PublishReelParams,
-  PublishReelResponse,
-  PublishVideoParams,
-  PublishVideoResponse,
-  PublishImageParams,
-  PublishImageResponse,
-  FacebookMedia,
+  type PublishReelParams,
+  type PublishReelResponse,
+  type PublishVideoParams,
+  type PublishVideoResponse,
+  type PublishImageParams,
+  type PublishImageResponse,
+  type FacebookMedia,
 } from "../types/facebookmedia.js";
 import { toGraphFields } from "../internal/utils.js";
 import { toSnakeFormData } from "../lib/transformCase.js";
 import { pollReelStatus, pollVideoStatus } from "../internal/poller.js";
-import { GetNode, ListEdge } from "../types/shared.js";
+import { type GetNode, type ListEdge } from "../types/shared.js";
 import { randomUUID } from "crypto";
-import FormData from "form-data";
+import type FormData from "form-data";
 import { FacebookUploadError } from "../internal/error.js";
-import { FacebookPost } from "../types/facebookpost.js";
+import { type FacebookPost } from "../types/facebookpost.js";
 import { createMediaResource } from "./PostResource.js";
-import { createPageCommentsResource } from "./comment/PageCommentResouorce.js";
+import { createPageCommentsResource } from "./comment/PageCommentResource.js";
 import { createPageInsightResource } from "./InsightResource.js";
-import { CreateResourceParams } from "../client.js";
+import { type CreateResourceParams } from "../client.js";
 import { isAxiosError } from "axios";
 
 export function createPageResource(params: CreateResourceParams) {
@@ -70,14 +70,17 @@ export function createVideosResource({ http, id }: CreateResourceParams) {
       });
 
       if (thumbnailUrl) {
-        api
-          .get(thumbnailUrl, { responseType: "stream" })
-          .then((thumb) => form.append("thumb", thumb.data))
-          .catch();
+        const thumb = await api.get(thumbnailUrl, { responseType: "stream" });
+        form.append("thumb", thumb.data);
       }
 
       const res = await http.post<PublishVideoResponse>(`/${id}/videos`, form);
-      return { postId: res.id! };
+      if (res.error || !res.id) {
+        throw new FacebookUploadError(
+          res.error ? JSON.stringify(res.error) : "Video publish returned no id",
+        );
+      }
+      return { postId: res.id };
     } catch (error) {
       if (isAxiosError(error) && error.response) {
         const { data, status } = error.response;
@@ -128,7 +131,7 @@ export function createReelsResource({ http, id }: CreateResourceParams) {
     const { thumbnailUrl, fileUrl, ...apiFields } = data;
 
     const { uploadUrl, videoId } = await startUploadSession();
-    if (!videoId) throw new Error("Failed to upload post due to upload session creation faliure");
+    if (!videoId) throw new Error("Failed to upload post due to upload session creation failure");
 
     await uploadFile(uploadUrl, fileUrl);
 

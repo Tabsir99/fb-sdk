@@ -1,4 +1,4 @@
-import { KeysToCamel } from "../lib/transformCase.js";
+import { type KeysToCamel } from "../lib/transformCase.js";
 
 interface FacebookUserRaw {
   id: string;

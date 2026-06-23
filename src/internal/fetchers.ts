@@ -1,10 +1,10 @@
 import type { HttpClient } from "../httpClient.js";
 import type { CommentWithPost } from "../types/facebookpost.js";
 import { ORDER } from "../types/shared.js";
-import type { GetPageComments } from "../resources/comment/PageCommentResouorce.js";
+import type { GetPageComments } from "../resources/comment/PageCommentResource.js";
 import { createBatchResource } from "../resources/createBatchResource.js";
 import { createPostResource } from "../resources/PostResource.js";
-import { KeysToCamel } from "../lib/transformCase.js";
+import { type KeysToCamel } from "../lib/transformCase.js";
 
 type GetPageCommentsParams = Parameters<GetPageComments>[0];
 
@@ -56,6 +56,8 @@ export const fetchComments: FetchComments = async (http, { postIds, query, curso
     if (result?.status !== 200) continue;
 
     const { id, message = "", picture, comments } = result.data;
+    // Facebook may omit the comments edge entirely (restricted posts, no activity).
+    if (!comments?.data) continue;
 
     for (const comment of comments.data) {
       allComments.push({

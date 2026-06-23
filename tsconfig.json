@@ -1,64 +1,51 @@
 {
   "compilerOptions": {
     // Project Options
-    "target": "ES2022", // Modern browsers/Node support ES2022
-    "lib": ["ES2022", "DOM", "DOM.Iterable"], // Include modern JS features + DOM types
-    "module": "NodeNext", // Use Node's native ESM
-    "moduleResolution": "nodenext", // Modern module resolution strategy
-    "rootDir": "./src", // Source files location
-    "outDir": "./dist", // Output directory
-    "sourceMap": true, // Generate sourcemaps for debugging
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "sourceMap": true,
     "declaration": true,
     "declarationMap": true,
 
     // Strict Checks
-    "strict": true, // Enable all strict type checking options
-    "noImplicitAny": true, // Raise error on expressions with implied 'any' type
-    "strictNullChecks": true, // Enable strict null checks
-    "strictFunctionTypes": true, // Enable strict checking of function types
-    "strictBindCallApply": true, // Enable strict 'bind', 'call', and 'apply' methods
-    "strictPropertyInitialization": true, // Ensure class properties are initialized
-    "noImplicitThis": true, // Raise error on 'this' expressions with implied 'any'
-    "alwaysStrict": true, // Parse in strict mode and emit "use strict"
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
 
     // Additional Checks
-    "noUnusedLocals": true, // Report errors on unused locals
-    "noUnusedParameters": true, // Report errors on unused parameters
-    "noImplicitReturns": true, // Report error when not all code paths return
-    "noFallthroughCasesInSwitch": true, // Report errors for fallthrough cases in switch
-    "noUncheckedIndexedAccess": true, // Add undefined to indexed access results
-    "noPropertyAccessFromIndexSignature": true, // Require explicit index signatures
-    "exactOptionalPropertyTypes": true, // Differentiate between undefined and not present
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "exactOptionalPropertyTypes": true,
 
     // Module Resolution
-    // "baseUrl": ".", // Base directory for module resolution
-    "esModuleInterop": true, // Enable CommonJS/AMD/UMD interop
-    // "preserveSymlinks": true, // Don't resolve symlinks to their real path
-    "forceConsistentCasingInFileNames": true, // Ensure consistent casing in imports
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    // Forces `import type` for type-only imports. This is load-bearing: several
+    // modules import types back through the client.ts hub, which is only
+    // cycle-free because those imports are erased at compile time.
+    "verbatimModuleSyntax": true,
 
     // Advanced
-    "skipLibCheck": true, // Skip type checking of declaration files
-    "isolatedModules": true, // Ensure code can be safely transpiled
-    "preserveConstEnums": true, // Don't erase const enum declarations
-    "resolveJsonModule": true, // Allow importing .json files
-    "allowJs": true, // Allow JavaScript files to be compiled
-    "checkJs": true, // Type check JavaScript files
-    "removeComments": true, // Remove comments in output files
-
-    // Experimental
-    "experimentalDecorators": true, // Enable experimental decorators
-    "emitDecoratorMetadata": true // Emit decorator metadata,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "removeComments": true
   },
 
-  "include": [
-    "src/**/*", // Include all files in src directory
-    "global.d.ts"
-  ],
+  "include": ["src/**/*"],
 
-  "exclude": [
-    "node_modules", // Exclude node_modules
-    "**/*.spec.ts", // Exclude test files
-    "dist", // Exclude output directory,
-    "src/temp"
-  ]
+  "exclude": ["node_modules", "dist", "src/temp"]
 }

@@ -114,6 +114,22 @@ describe("createBatchResource", () => {
       expect(results[0]!.status).toBe(400);
       expect(results[0]!.data).toBe('{"error":{"message":"Invalid"}}');
     });
+
+    it("maps null sub-responses (Facebook batch timeouts) to { status: 0, data: null }", async () => {
+      const batchResponse = [
+        { code: 200, body: '{"id":"1"}' },
+        null,
+      ] as unknown as BatchSubResponse[];
+      const http = createMockHttp([batchResponse]);
+      const batch = createBatchResource(http);
+
+      const req1 = createBatchableRequest("GET", "a", async () => ({}));
+      const req2 = createBatchableRequest("GET", "b", async () => ({}));
+      const results = await batch([req1, req2]);
+
+      expect(results[0]).toEqual({ status: 200, data: { id: "1" } });
+      expect(results[1]).toEqual({ status: 0, data: null });
+    });
   });
 
   describe("options", () => {

@@ -9,20 +9,16 @@ import type { BatchableRequest, ListEdge } from "../../types/shared.js";
 import { toGraphFields } from "../../internal/utils.js";
 import { toSnakeFormData } from "../../lib/transformCase.js";
 import {
-  UpdateCommentParams,
-  UpdateCommentResponse,
-  DeleteCommentResponse,
-  LikeCommentResponse,
+  type UpdateCommentParams,
+  type UpdateCommentResponse,
+  type DeleteCommentResponse,
+  type LikeCommentResponse,
 } from "../../types/facebookpost.js";
-import { GetNode } from "../../types/shared.js";
-import { CreateResourceParams, Store } from "../../client.js";
+import { type GetNode } from "../../types/shared.js";
+import { type CreateResourceParams, type FbSdkConfig } from "../../client.js";
 
-export interface PageCommentConfig {
-  /** Webhook store for targeted fetching of recently-active posts. */
-  store?: Store;
-  /** Max posts to scan in on-demand mode (default: 50, max: 100). */
-  postsLimit?: number;
-}
+/** @deprecated Same shape as FbSdkConfig — pass these options to createFbSdk() directly. */
+export type PageCommentConfig = FbSdkConfig;
 
 // ─── Single Comment Operations ───
 
@@ -55,7 +51,7 @@ export function createCommentResource({ http, id }: CreateResourceParams) {
     return http.delete<LikeCommentResponse>(`/${id}/likes`);
   };
 
-  const { create: reply, list: replies } = createCommenstResource({ http, id });
+  const { create: reply, list: replies } = createCommentsResource({ http, id });
 
   return {
     get,
@@ -74,7 +70,7 @@ export type CreateComment = (data: CreateCommentParams) => Promise<CreateComment
 /**
  * ObjectId can be a post or comment Id
  */
-export const createCommenstResource = ({ http, id }: CreateResourceParams) => {
+export const createCommentsResource = ({ http, id }: CreateResourceParams) => {
   const list: GetComments = (query) =>
     http.get(`/${id}/comments`, {
       params: { fields: toGraphFields(query.fields), ...query.options },

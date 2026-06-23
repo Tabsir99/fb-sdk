@@ -1,13 +1,16 @@
-import { createHttpClient, HttpClient } from "./httpClient.js";
+import { createHttpClient, type HttpClient } from "./httpClient.js";
 import { createPostResource } from "./resources/PostResource.js";
 import { createPageResource } from "./resources/PageResource.js";
 import { createUserResource } from "./resources/UserResource.js";
 import { createCommentResource } from "./resources/comment/CommentResource.js";
-import { Store } from "./client.js";
+import type { Store } from "./store/types.js";
 import { createBatchResource } from "./resources/createBatchResource.js";
 
 export interface FbSdkConfig {
+  /** Webhook-fed store enabling targeted comment fetching of recently-active posts. */
   store?: Store;
+  /** Max posts to scan per page in on-demand comment aggregation (default: 50, max: 100). */
+  postsLimit?: number;
 }
 
 export interface CreateResourceParams {
@@ -33,6 +36,9 @@ export function createFbSdk(config: FbSdkConfig = {}) {
 export { createMemoryStore } from "./store/memory.js";
 export { createRedisStore } from "./store/redis.js";
 export { createWebhookHandler } from "./webhook/handler.js";
+export { ORDER } from "./types/shared.js";
+export { FacebookUploadError } from "./internal/error.js";
+export type { HttpClient } from "./httpClient.js";
 export type { Store } from "./store/types.js";
 export type { RedisLike } from "./store/redis.js";
 export type { WebhookHandlerConfig } from "./webhook/handler.js";

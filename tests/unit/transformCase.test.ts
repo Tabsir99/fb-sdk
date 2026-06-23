@@ -56,11 +56,24 @@ describe("transformCase", () => {
       ]);
     });
 
-    it("passes primitives through unchanged", () => {
+    it("passes primitives through unchanged — including bare strings", () => {
       expect(toCamel(42)).toBe(42);
-      // toCamel on a string runs toCamelCase on it
-      expect(toCamel("created_time")).toBe("createdTime");
+      // toCamel transforms KEYS only; a bare string is a value, not a key
+      expect(toCamel("created_time")).toBe("created_time");
       expect(toCamel("hello")).toBe("hello");
+    });
+
+    it("never rewrites string VALUES (message text, cursors, URLs)", () => {
+      expect(toCamel({ message: "check_this out, see my_page" })).toEqual({
+        message: "check_this out, see my_page",
+      });
+      // base64url pagination cursors legitimately contain underscores
+      expect(toCamel({ paging: { cursors: { after: "QVFIU_n3aBc_x9" } } })).toEqual({
+        paging: { cursors: { after: "QVFIU_n3aBc_x9" } },
+      });
+      expect(toCamel({ permalink_url: "https://fb.com/posts/pfbid0_abc" })).toEqual({
+        permalinkUrl: "https://fb.com/posts/pfbid0_abc",
+      });
     });
 
     it("passes null through unchanged", () => {
@@ -91,6 +104,35 @@ describe("transformCase", () => {
 
     it("converts keys of objects in an array to snake_case", () => {
       expect(toSnakeObj([{ someKey: 1 }])).toEqual([{ some_key: 1 }]);
+    });
+
+    it("never rewrites string VALUES (post bodies must arrive verbatim)", () => {
+      expect(toSnakeObj({ message: "Hello World" })).toEqual({ message: "Hello World" });
+      expect(toSnakeObj({ geoLocations: { countries: ["US", "GB"] } })).toEqual({
+        geo_locations: { countries: ["US", "GB"] },
+      });
+      expect(toSnakeObj("alreadyCamel")).toBe("alreadyCamel");
+    });
+  });
+
+  describe("toSnakeFormData", () => {
+    it("stringifies booleans — form-data rejects raw boolean values", async () => {
+      const { toSnakeFormData } = await import("../../src/lib/transformCase.js");
+      const form = toSnakeFormData({ published: true, fileUrl: "https://x/v.mp4" });
+      const content = form.getBuffer().toString();
+      expect(content).toContain('name="published"');
+      expect(content).toContain("true");
+      expect(content).toContain('name="file_url"');
+    });
+
+    it("JSON-encodes nested objects with snake_cased keys and verbatim values", async () => {
+      const { toSnakeFormData } = await import("../../src/lib/transformCase.js");
+      const form = toSnakeFormData({
+        feedTargeting: { geoLocations: { countries: ["US"] } },
+      });
+      const content = form.getBuffer().toString();
+      expect(content).toContain('name="feed_targeting"');
+      expect(content).toContain('{"geo_locations":{"countries":["US"]}}');
     });
   });
 });

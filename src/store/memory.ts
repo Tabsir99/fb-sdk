@@ -1,4 +1,4 @@
-import { Store } from "./types.js";
+import { type Store } from "./types.js";
 /**
  * Creates an in-memory Store.
  * Suitable for single-process apps. Data is lost on restart.

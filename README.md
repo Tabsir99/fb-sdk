@@ -185,7 +185,8 @@ const results = await sdk.batch([
 ```
 
 - Up to 50 requests per HTTP call. Larger arrays are chunked transparently.
-- Each result is `{ status, data }`. Non-200 responses leave `data` as the raw body string.
+- POSTs created from a JSON payload carry their body into the batch. FormData uploads can't be batched.
+- Each result is `{ status, data }`. Non-200 responses leave `data` as the raw body string; sub-requests Facebook timed out come back as `{ status: 0, data: null }`.
 - `includeHeaders` is opt-in.
 
 ### 5. Page-level comment fan-out
@@ -193,7 +194,7 @@ const results = await sdk.batch([
 The `sdk.page(id).comments.list(...)` resource is the one place the SDK does something more than a 1:1 Graph call — it aggregates comments across multiple posts. There are two modes:
 
 - **Store-backed** (recommended): pass a `Store` in `createFbSdk({ store })` and run the webhook handler. The store remembers which posts had recent comment activity; `list({ options: { since } })` only fetches comments from those posts.
-- **On-demand**: no store. The SDK pulls the latest 50 posts on the page and fans out comments across them.
+- **On-demand**: no store. The SDK pulls the latest posts on the page (`createFbSdk({ postsLimit })`, default 50, max 100) and fans out comments across them.
 
 Pagination uses a base64url-encoded cursor that bundles per-post cursors so the caller sees a single opaque `after` token. See [docs/webhooks-and-stores.md](docs/webhooks-and-stores.md).
 
@@ -228,9 +229,10 @@ app.post("/webhook", webhook.handleEvent);
 
 The handler:
 
-- Verifies the `X-Hub-Signature-256` HMAC against `appSecret`.
+- Verifies the `X-Hub-Signature-256` HMAC against `appSecret` (timing-safe comparison).
 - Responds `200` immediately (FB will retry otherwise) and processes the payload in the background.
 - For `feed` changes of type `comment` with verb `add`, calls `store.recordActivity(pageId, postId, time)`.
+- Reports background failures (e.g. store outages) to the optional `onError` callback instead of crashing the process after the response is sent.
 
 Then your reader uses the same store:
 
@@ -256,7 +258,7 @@ const redis = new Redis(process.env.REDIS_URL!);
 const store = createRedisStore(redis);
 ```
 
-`createRedisStore` accepts anything matching the `RedisLike` interface — `ioredis`, `node-redis` v4 with a thin adapter, or your own mock.
+`createRedisStore` accepts anything matching the `RedisLike` interface — `ioredis`, `node-redis` v4 with a thin adapter, or your own mock. It uses `ZADD GT` (Redis ≥ 6.2) so out-of-order webhook deliveries can't move activity timestamps backwards.
 
 ---
 
@@ -282,7 +284,7 @@ src/
 │   ├── createBatchResource.ts   batch([...]) with 50-chunking
 │   └── comment/
 │       ├── CommentResource.ts        Single-comment CRUD + reply
-│       └── PageCommentResouorce.ts   Cross-post aggregation
+│       └── PageCommentResource.ts    Cross-post aggregation
 ├── store/
 │   ├── types.ts           Store interface
 │   ├── memory.ts          createMemoryStore
@@ -309,13 +311,16 @@ tests/
 
 ```bash
 pnpm install
-pnpm test               # runs vitest (unit + typecheck)
-pnpm build              # runs tests, then tsc → dist/
+pnpm lint               # eslint (type-aware rules)
+pnpm test               # vitest — unit tests + compile-time type tests
+pnpm check              # lint + test
+pnpm build              # check, then tsc → dist/
 ```
 
-- Unit tests: `tests/unit/*.test.ts` (vitest).
-- Type tests: `tests/types/*.test-d.ts` — typecheck only, using `expect-type`. They include `@ts-expect-error` markers to assert that invalid usages fail to compile.
-- `tsconfig.json` is on the strict end: `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature`, `strictNullChecks` all on.
+- Unit tests: `tests/unit/*.test.ts` (vitest). `httpClientContract.test.ts` exercises the **real** axios pipeline via adapter injection — keep it green when touching `httpClient.ts` or `batchable.ts`.
+- Type tests: `tests/types/*.test-d.ts` — typecheck only, using `expect-type`. They include `@ts-expect-error` markers to assert that invalid usages fail to compile. They run as part of `pnpm test`.
+- Linting runs before anything ships: `build` (and therefore `prepublishOnly`) is `lint → test → tsc`.
+- `tsconfig.json` is on the strict end: `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature`, `verbatimModuleSyntax` all on.
 
 ---
 

@@ -1,4 +1,4 @@
-import { KeysToCamel } from "../lib/transformCase.js";
+import { type KeysToCamel } from "../lib/transformCase.js";
 import type { CollectionOf, PictureData, BaseEdgeOptions, ORDER } from "./shared.js";
 
 export interface UserRaw {

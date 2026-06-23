@@ -1,8 +1,8 @@
 import { toGraphFields } from "../internal/utils.js";
-import { FacebookUser } from "../types/facebookuser.js";
-import { FacebookPage } from "../types/facebookpage.js";
-import { FbFieldSelector, FbPickDeep, ListEdge, BatchableRequest } from "../types/shared.js";
-import { CreateResourceParams } from "../client.js";
+import { type FacebookUser } from "../types/facebookuser.js";
+import { type FacebookPage } from "../types/facebookpage.js";
+import { type FbFieldSelector, type FbPickDeep, type ListEdge, type BatchableRequest } from "../types/shared.js";
+import { type CreateResourceParams } from "../client.js";
 
 export type GetUser = <F extends FbFieldSelector<FacebookUser>>(
   fields: F,

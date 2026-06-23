@@ -1,4 +1,4 @@
-import { BatchableRequest } from "../client.js";
+import type { BatchableRequest } from "../client.js";
 import { toSnakeCase } from "../lib/transformCase.js";
 
 export function createBatchableRequest<T>(
@@ -6,28 +6,36 @@ export function createBatchableRequest<T>(
   relativeUrl: string,
   executor: () => Promise<T>,
   _transform?: (raw: any) => any,
+  body?: string,
 ): BatchableRequest<T> {
+  // Single-flight: the executor runs at most once no matter how many times the
+  // request is awaited; .transform() children share the parent's in-flight call.
+  let inflight: Promise<T> | undefined;
+  const run = () => (inflight ??= executor());
+
   const req: any = {
     method,
     relative_url: relativeUrl,
     then(onFulfilled?: any, onRejected?: any) {
-      return executor().then(onFulfilled, onRejected);
+      return run().then(onFulfilled, onRejected);
     },
     catch(onRejected?: any) {
-      return executor().then(undefined, onRejected);
+      return run().then(undefined, onRejected);
     },
     transform<U>(fn: (raw: T) => U): BatchableRequest<U> {
       const prev = _transform;
       return createBatchableRequest<U>(
         method,
         relativeUrl,
-        () => executor().then(fn),
+        () => run().then(fn),
         (raw: any) => fn(prev ? prev(raw) : raw),
+        body,
       );
     },
   };
 
   if (_transform) req._transform = _transform;
+  if (body !== undefined) req.body = body;
 
   return req;
 }
@@ -42,4 +50,18 @@ export function buildRelativeUrl(path: string, params: Record<string, unknown>):
   }
 
   return parts.length > 0 ? `${stripped}?${parts.join("&")}` : stripped;
+}
+
+/**
+ * Serializes a (already snake_cased) JSON body into the urlencoded string
+ * Facebook's batch API expects in a sub-request's `body` field.
+ * Object/array values are JSON-encoded, matching Graph API conventions.
+ */
+export function toUrlEncodedBody(obj: Record<string, unknown>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined || value === null) continue;
+    params.append(key, typeof value === "object" ? JSON.stringify(value) : String(value));
+  }
+  return params.toString();
 }

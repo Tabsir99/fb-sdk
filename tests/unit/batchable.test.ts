@@ -32,6 +32,32 @@ describe("batchable", () => {
       await expect(req).rejects.toThrow("fail");
       expect(executor).toHaveBeenCalledTimes(1);
     });
+
+    it("is single-flight: awaiting the same request twice runs the executor once", async () => {
+      const executor = vi.fn().mockResolvedValue({ id: "1" });
+      const req = createBatchableRequest("GET", "path", executor);
+
+      const [a, b] = await Promise.all([req, req]);
+      await req;
+
+      expect(executor).toHaveBeenCalledTimes(1);
+      expect(a).toBe(b);
+    });
+
+    it("exposes a body when provided (POST batch payload)", () => {
+      const req = createBatchableRequest("POST", "1/comments", async () => ({}), undefined, "message=hi");
+      expect((req as any).body).toBe("message=hi");
+      expect(JSON.parse(JSON.stringify(req))).toEqual({
+        method: "POST",
+        relative_url: "1/comments",
+        body: "message=hi",
+      });
+    });
+
+    it("omits the body property entirely when not provided", () => {
+      const req = createBatchableRequest("GET", "path", async () => ({}));
+      expect("body" in req).toBe(false);
+    });
   });
 
   describe(".transform() chain", () => {
@@ -93,6 +119,22 @@ describe("batchable", () => {
       });
       const transformed = req.transform((v) => v.toUpperCase());
       await expect(transformed).rejects.toThrow("boom");
+    });
+
+    it("base and transformed request share one in-flight executor call", async () => {
+      const executor = vi.fn(async () => 10);
+      const req = createBatchableRequest("GET", "path", executor);
+      const transformed = req.transform((n) => n * 2);
+
+      expect(await req).toBe(10);
+      expect(await transformed).toBe(20);
+      expect(executor).toHaveBeenCalledTimes(1);
+    });
+
+    it("propagates body through the transform chain", () => {
+      const req = createBatchableRequest("POST", "p", async () => 1, undefined, "k=v");
+      const transformed = req.transform((n) => n);
+      expect((transformed as any).body).toBe("k=v");
     });
   });
 

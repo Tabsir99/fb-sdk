@@ -1,6 +1,6 @@
-import { ListMedia } from "../resources/PageResource.js";
-import { GetMedia } from "../resources/PostResource.js";
-import { FacebookMedia } from "../types/facebookmedia.js";
+import { type ListMedia } from "../resources/PageResource.js";
+import { type GetMedia } from "../resources/PostResource.js";
+import { type FacebookMedia } from "../types/facebookmedia.js";
 import { FacebookUploadError } from "./error.js";
 
 interface PollConfig {
@@ -51,6 +51,9 @@ export const pollVideoStatus = poll(
         postId: true,
         universalVideoId: true,
       },
+      // Without an explicit limit the default page (~25) can miss the tracked
+      // upload on busy pages and falsely time out.
+      options: { limit: 100 },
     });
     const target = videos.data.find((v) => v.universalVideoId === trackingId);
     if (!target) return undefined;

@@ -1,4 +1,4 @@
-import { KeysToCamel } from "../lib/transformCase.js";
+import { type KeysToCamel } from "../lib/transformCase.js";
 
 interface MediaStatus {
   video_status: "upload_complete" | "error";

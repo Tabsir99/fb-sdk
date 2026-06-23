@@ -1,9 +1,9 @@
 import type { FacebookPost, PostExpiration } from "../types/facebookpost.js";
-import { BatchableRequest, GetNode } from "../types/shared.js";
+import { type BatchableRequest, type GetNode } from "../types/shared.js";
 import { toGraphFields } from "../internal/utils.js";
-import { FacebookMedia } from "../types/facebookmedia.js";
-import { createCommenstResource } from "./comment/CommentResource.js";
-import { CreateResourceParams } from "../client.js";
+import { type FacebookMedia } from "../types/facebookmedia.js";
+import { createCommentsResource } from "./comment/CommentResource.js";
+import { type CreateResourceParams } from "../client.js";
 import { createPostInsightResource } from "./InsightResource.js";
 
 export type Expire = (time: number, type: PostExpiration["type"]) => BatchableRequest<void>;
@@ -23,7 +23,7 @@ export function createPostResource({ id, http }: CreateResourceParams) {
   return {
     expire,
     get,
-    comments: createCommenstResource({ http, id }),
+    comments: createCommentsResource({ http, id }),
     insights: createPostInsightResource({ http, id }),
   };
 }

@@ -30,7 +30,7 @@ type CleanCollection<T, Data, F> = { data: Data[]; paging: Paging } & (Exclude<
   undefined
 > extends { options: infer O }
   ? Required<Pick<CollectionExtras<T>, Extract<keyof CollectionExtras<T>, TrueKeysOf<O>>>>
-  : {});
+  : unknown);
 
 export type FbPickDeep<T, F> = {
   [K in keyof T as K extends keyof F ? K : never]: NonNullable<T[K]> extends CollectionOf<infer U>
@@ -134,6 +134,8 @@ export interface BatchableRequest<T> {
 export interface BatchSubRequest {
   method: string;
   relative_url: string;
+  /** urlencoded payload for POST sub-requests; absent for GET/DELETE and FormData uploads. */
+  body?: string;
   _transform?: (raw: any) => any;
 }
 

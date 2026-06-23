@@ -37,10 +37,12 @@ export function createBatchResource(http: HttpClient) {
       form.append("batch", JSON.stringify(chunk));
       form.append("include_headers", includeHeaders ? "true" : "false");
 
-      const responses = await http.post<BatchSubResponse[]>("/", form);
+      const responses = await http.post<(BatchSubResponse | null)[]>("/", form);
 
-      for (let idx = 0; idx < responses.length; idx++) {
-        finalResponses.push(processResponse(chunk[idx]!, responses[idx]!));
+      for (let idx = 0; idx < chunk.length; idx++) {
+        const res = responses[idx];
+        // Facebook returns null for sub-requests that timed out within the batch.
+        finalResponses.push(res ? processResponse(chunk[idx]!, res) : { status: 0, data: null });
       }
     }
 

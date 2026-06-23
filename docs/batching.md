@@ -28,8 +28,8 @@ export interface BatchableRequest<T> {
 
 A `BatchableRequest<T>` carries:
 
-1. `method` + `relative_url` — exactly what Facebook's batch endpoint expects in each sub-request entry.
-2. `then` / `catch` — thenable, so `await req` runs the *single* HTTP request.
+1. `method` + `relative_url` — exactly what Facebook's batch endpoint expects in each sub-request entry. POSTs built from a JSON payload also carry a urlencoded `body` (FormData uploads cannot be batched).
+2. `then` / `catch` — thenable, so `await req` runs the *single* HTTP request. Execution is **single-flight**: awaiting the same request again (or awaiting both it and a `.transform()` child) reuses the first call instead of firing another.
 3. `transform(fn)` — lazily compose a mapping function over the eventual response.
 
 ### Constructor
@@ -40,10 +40,11 @@ export function createBatchableRequest<T>(
   relativeUrl: string,
   executor: () => Promise<T>,
   _transform?: (raw: any) => any,
+  body?: string,
 ): BatchableRequest<T> { … }
 ```
 
-The `executor` is the "do the HTTP call by itself" function. It's lazy — calling `createBatchableRequest` does **not** execute anything. The executor only runs when something calls `.then(...)` (which `await` does).
+The `executor` is the "do the HTTP call by itself" function. It's lazy — calling `createBatchableRequest` does **not** execute anything. The executor only runs when something calls `.then(...)` (which `await` does), and at most once — the in-flight promise is cached and shared with every later `await` and every `.transform()` child.
 
 This laziness is what makes batching possible: building a list of `BatchableRequest`s to pass into `sdk.batch([...])` doesn't fire 50 HTTP calls.
 
@@ -86,21 +87,26 @@ const [{ data }] = await sdk.batch([titles]);
 Internally, the new request also stores a private `_transform` reference:
 
 ```ts
+let inflight: Promise<T> | undefined;
+const run = () => (inflight ??= executor());        // single-flight
+
 const req: any = {
   method,
   relative_url: relativeUrl,
-  then(onFulfilled, onRejected) { return executor().then(onFulfilled, onRejected); },
+  then(onFulfilled, onRejected) { return run().then(onFulfilled, onRejected); },
   transform<U>(fn) {
     const prev = _transform;
     return createBatchableRequest<U>(
       method,
       relativeUrl,
-      () => executor().then(fn),
+      () => run().then(fn),                          // child shares the parent's call
       (raw: any) => fn(prev ? prev(raw) : raw),
+      body,
     );
   },
 };
 if (_transform) req._transform = _transform;
+if (body !== undefined) req.body = body;
 ```
 
 Two things to notice:
@@ -140,10 +146,11 @@ const responses = await batch([
 The `createBatchResource` function returns a callable that:
 
 1. **Chunks the input array into groups of 50** (Facebook's per-batch ceiling).
-2. For each chunk, builds a multipart form with `batch=<JSON array>` and POSTs to `/` with the page access token. The JSON array contains each request's `{ method, relative_url }` only — the executors are never run.
+2. For each chunk, builds a multipart form with `batch=<JSON array>` and POSTs to `/` with the page access token. The JSON array contains each request's `{ method, relative_url, body? }` — the executors are never run. `body` is present for POSTs built from a JSON payload (urlencoded); **FormData uploads cannot be embedded in a batch** and serialize without a body.
 3. **Processes responses** per sub-request:
    - On `code === 200`, parses the body, runs `toCamel` to convert keys, then runs the request's `_transform` (if any).
    - On non-200, returns `{ status: code, data: <raw body string> }` — no parsing.
+   - On a `null` sub-response (Facebook timed that sub-request out), returns `{ status: 0, data: null }`.
 4. **Concatenates results from all chunks** so the output array's order matches the input array exactly.
 
 The return type is a tuple matching the input:
@@ -168,7 +175,7 @@ await batch([req1, req2], { includeHeaders: true });
 
 ### Error model
 
-Per-sub-request errors do **not** throw. They appear as `{ status: 4xx, data: "<raw error body>" }`. This is intentional — you want one bad sub-request not to fail the whole batch. Only HTTP-level failures (network error, 5xx on the batch endpoint itself, malformed batch envelope) reject the promise.
+Per-sub-request errors do **not** throw. They appear as `{ status: 4xx, data: "<raw error body>" }`, and sub-requests Facebook timed out appear as `{ status: 0, data: null }`. This is intentional — you want one bad sub-request not to fail the whole batch. Only HTTP-level failures (network error, 5xx on the batch endpoint itself, malformed batch envelope) reject the promise.
 
 ---
 

@@ -1,9 +1,9 @@
 import { fetchComments } from "../../internal/fetchers.js";
-import { KeysToCamel } from "../../lib/transformCase.js";
-import { CommentEdgeOptions, CommentWithPost } from "../../types/facebookpost.js";
-import { Collection, Fields, FbFieldSelector, ORDER } from "../../types/shared.js";
+import { type KeysToCamel } from "../../lib/transformCase.js";
+import { type CommentEdgeOptions, type CommentWithPost } from "../../types/facebookpost.js";
+import { type Collection, type Fields, type FbFieldSelector, ORDER } from "../../types/shared.js";
 import { createPostsResource } from "../PageResource.js";
-import { CreateResourceParams } from "../../client.js";
+import { type CreateResourceParams } from "../../client.js";
 
 // ─── Cursor Encoding ───
 interface AggregationCursor {
@@ -15,7 +15,14 @@ function encodeCursor(cursor: AggregationCursor): string {
 }
 
 function decodeCursor(encoded: string): AggregationCursor {
-  return JSON.parse(Buffer.from(encoded, "base64url").toString("utf-8")) as AggregationCursor;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(encoded, "base64url").toString("utf-8"));
+    const cursors = (parsed as AggregationCursor | null)?.cursors;
+    if (!cursors || typeof cursors !== "object") throw new Error("missing cursors");
+    return parsed as AggregationCursor;
+  } catch {
+    throw new Error(`Invalid pagination cursor: "${encoded.slice(0, 24)}..."`);
+  }
 }
 
 type PageComment = KeysToCamel<CommentWithPost>;
@@ -28,6 +35,7 @@ export type GetPageComments = <F extends FbFieldSelector<PageComment>>(query: {
 export function createPageCommentsResource({ http, id, config }: CreateResourceParams) {
   const PostResource = createPostsResource({ http, id });
   const store = config?.store;
+  const postsLimit = Math.min(config?.postsLimit ?? 50, 100);
 
   /**
    * Aggregated page-level comments from multiple posts.
@@ -51,7 +59,7 @@ export function createPageCommentsResource({ http, id, config }: CreateResourceP
       const posts = await PostResource.list({
         fields: { id: true },
         options: {
-          limit: 50,
+          limit: postsLimit,
           ...(until && { until }),
           order: ORDER.NEWEST,
         },
@@ -72,12 +80,13 @@ export function createPageCommentsResource({ http, id, config }: CreateResourceP
       cursors,
     });
 
+    const hasMore = Object.keys(nextCursors).length > 0;
     return {
       data: comments as any,
       paging: {
         cursors: {
           before: "",
-          after: encodeCursor({ cursors: nextCursors }),
+          after: hasMore ? encodeCursor({ cursors: nextCursors }) : "",
         },
       },
     };
