@@ -2,9 +2,38 @@ import FormData from "form-data";
 import type { HttpClient } from "../httpClient.js";
 import type { BatchableRequest, BatchSubRequest, BatchSubResponse } from "../types/shared.js";
 import { toCamel } from "../lib/transformCase.js";
+import {
+  toFacebookError,
+  toNetworkError,
+  invokeErrorHook,
+  type FacebookError,
+  type FacebookErrorHook,
+} from "../internal/error.js";
 
 export interface BatchRequestOptions {
   includeHeaders?: boolean;
+}
+
+export interface CreateBatchResourceOptions {
+  /** Invoked with a strictly-typed error for each failed batch sub-response. */
+  onError?: FacebookErrorHook | undefined;
+}
+
+// A failed sub-response: its `body` is a stringified JSON envelope (or non-JSON
+// on transport failure); the outer batch call already succeeded with HTTP 200.
+function reportSubResponseError(res: BatchSubResponse, onError: FacebookErrorHook): void {
+  let fbError: FacebookError | null = null;
+  if (res.body) {
+    try {
+      fbError = toFacebookError(toCamel(JSON.parse(res.body)), res.code);
+    } catch {
+      // Body wasn't JSON — fall through to a transport-level error below.
+    }
+  }
+  invokeErrorHook(
+    onError,
+    fbError ?? toNetworkError(new Error(`Batch sub-request failed with status ${res.code}`), res.code),
+  );
 }
 
 type BatchResponses<T extends readonly BatchSubRequest[]> = {
@@ -22,13 +51,15 @@ const processResponse = (req: BatchSubRequest, res: BatchSubResponse) => {
   return { status: res.code, data: res.body };
 };
 
-export function createBatchResource(http: HttpClient) {
+export function createBatchResource(http: HttpClient, options?: CreateBatchResourceOptions) {
+  const onError = options?.onError;
+
   const batch = async <const T extends readonly BatchSubRequest[]>(
     requests: T,
-    options?: BatchRequestOptions,
+    batchOptions?: BatchRequestOptions,
   ): Promise<BatchResponses<T>> => {
     const finalResponses: any[] = [];
-    const includeHeaders = options?.includeHeaders ?? false;
+    const includeHeaders = batchOptions?.includeHeaders ?? false;
 
     for (let i = 0; i < requests.length; i += 50) {
       const chunk = requests.slice(i, i + 50);
@@ -41,8 +72,19 @@ export function createBatchResource(http: HttpClient) {
 
       for (let idx = 0; idx < chunk.length; idx++) {
         const res = responses[idx];
-        // Facebook returns null for sub-requests that timed out within the batch.
-        finalResponses.push(res ? processResponse(chunk[idx]!, res) : { status: 0, data: null });
+        if (!res) {
+          // Facebook returns null for sub-requests that timed out within the batch.
+          if (onError) {
+            invokeErrorHook(
+              onError,
+              toNetworkError(new Error("Batch sub-request did not complete (timed out)")),
+            );
+          }
+          finalResponses.push({ status: 0, data: null });
+          continue;
+        }
+        if (onError && res.code >= 400) reportSubResponseError(res, onError);
+        finalResponses.push(processResponse(chunk[idx]!, res));
       }
     }
 

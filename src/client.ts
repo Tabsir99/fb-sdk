@@ -5,12 +5,21 @@ import { createUserResource } from "./resources/UserResource.js";
 import { createCommentResource } from "./resources/comment/CommentResource.js";
 import type { Store } from "./store/types.js";
 import { createBatchResource } from "./resources/createBatchResource.js";
+import type { FacebookErrorHook } from "./internal/error.js";
 
 export interface FbSdkConfig {
   /** Webhook-fed store enabling targeted comment fetching of recently-active posts. */
   store?: Store;
   /** Max posts to scan per page in on-demand comment aggregation (default: 50, max: 100). */
   postsLimit?: number;
+  /**
+   * Invoked after a response is received but before it is returned/thrown,
+   * whenever an error is detected — on direct requests and on individual batch
+   * sub-responses. Receives a strictly-typed {@link FacebookError} (narrow on
+   * `.category`) with a `.raw` escape hatch. Observational: it never changes
+   * what the SDK throws/returns.
+   */
+  onError?: FacebookErrorHook;
 }
 
 export interface CreateResourceParams {
@@ -21,14 +30,14 @@ export interface CreateResourceParams {
 
 export function createFbSdk(config: FbSdkConfig = {}) {
   return (accessToken: string) => {
-    const http = createHttpClient(accessToken);
+    const http = createHttpClient(accessToken, { onError: config.onError });
     return {
       post: (postId: string) => createPostResource({ http, id: postId, config }),
       page: (pageId: string) => createPageResource({ http, id: pageId, config }),
       comment: (commentId: string) => createCommentResource({ http, id: commentId, config }),
       me: createUserResource({ http, config, id: "me" }),
       http,
-      batch: createBatchResource(http),
+      batch: createBatchResource(http, { onError: config.onError }),
     };
   };
 }
@@ -37,7 +46,7 @@ export { createMemoryStore } from "./store/memory.js";
 export { createRedisStore } from "./store/redis.js";
 export { createWebhookHandler } from "./webhook/handler.js";
 export { ORDER } from "./types/shared.js";
-export { FacebookUploadError } from "./internal/error.js";
+// Error model lives at the "@tabsircg/fb-sdk/errors" subpath — see src/errors.ts.
 export type { HttpClient } from "./httpClient.js";
 export type { Store } from "./store/types.js";
 export type { RedisLike } from "./store/redis.js";

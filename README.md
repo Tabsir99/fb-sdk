@@ -16,6 +16,7 @@ It started as the Facebook layer for a scheduling tool (Scheduly) and was extrac
 - **Native batch API** with automatic chunking past Facebook's 50-request limit.
 - **First-class webhook + store.** A page-feed webhook handler plus an in-memory and a Redis store, used for efficient comment fan-out across many posts.
 - **Async upload helpers** for videos, reels, and images — including the 3-phase reel upload session, status polling, and 504 recovery.
+- **Typed error hook.** An optional `onError` reports a strictly-typed `FacebookError` — a discriminated union you narrow on `.category`, with a `raw` escape hatch — for every failed request and batch sub-response. Observational: it never changes what's thrown or returned.
 
 ---
 
@@ -262,17 +263,77 @@ const store = createRedisStore(redis);
 
 ---
 
+## Error handling
+
+Pass an `onError` hook to `createFbSdk`. It runs after a response is received but **before** it is returned or thrown, whenever an error is detected — on direct requests *and* on individual batch sub-responses. It is purely observational: registering it never changes what the SDK throws or returns.
+
+```ts
+import { createFbSdk } from "@tabsircg/fb-sdk";
+
+const sdk = createFbSdk({
+  onError: (err) => {
+    switch (err.category) {
+      case "auth": // token expired/revoked — re-authenticate
+        reauthenticate(err.code, err.subcode);
+        break;
+      case "rate_limit": // back off; usage headers say roughly for how long
+        logger.warn("throttled", err.usage?.appUsage);
+        break;
+      case "network": // timeout / DNS / transport — usually retryable
+        metrics.increment("fb.network_error");
+        break;
+      default:
+        logger.warn({ code: err.code, trace: err.traceId }, err.message);
+    }
+  },
+})(token);
+```
+
+Error types and classes live at the **`@tabsircg/fb-sdk/errors`** subpath — kept off the main entry to keep it uncluttered. Inside the hook, `err` is inferred, so you often don't need to import anything.
+
+The hook receives a strictly-typed `FacebookError` — a discriminated union you narrow on `.category`:
+
+| category        | when                                                            | retryable             |
+| --------------- | --------------------------------------------------------------- | --------------------- |
+| `auth`          | token expired/revoked/invalid (190, 102)                        | no — re-authenticate  |
+| `permission`    | missing permission or Page role (10, 3, 200–299, 190+492)       | no                    |
+| `rate_limit`    | throttled (4, 17, 32, 341, 613, 80000–80014); carries `usage`   | yes — back off        |
+| `invalid_param` | bad request / params / object (100, 506, 1609005, …)            | no                    |
+| `policy_block`  | integrity/abuse block (368)                                     | after a wait          |
+| `transient`     | temporary server error (1, 2, `is_transient`, or 5xx)           | yes — immediate       |
+| `unknown`       | a Graph envelope the SDK did not classify                       | inspect `code` / `raw`|
+| `network`       | no Graph envelope: timeout, DNS, non-JSON body, batch timeout   | usually               |
+
+Every error carries `category`, `httpStatus`, `isTransient`, and `raw` (the unprocessed, camelized envelope — the escape hatch). Graph-envelope errors (everything except `network`) also carry `code`, `type`, `message`, and optional `subcode`, `traceId`, `userTitle`, `userMessage`.
+
+Because Facebook's code space is open-ended and version-volatile, `code` and `subcode` stay plain `number` — never closed literal unions. Named constants are exported for the documented values:
+
+```ts
+import { FacebookErrorCode, FacebookAuthSubcode } from "@tabsircg/fb-sdk/errors";
+
+if (err.code === FacebookErrorCode.ACCESS_TOKEN && err.subcode === FacebookAuthSubcode.EXPIRED) {
+  // token expired
+}
+```
+
+The error classes are exported from `@tabsircg/fb-sdk/errors` for `instanceof` checks — `FacebookErrorBase` (any SDK error), `FacebookGraphError` (any error carrying a Graph envelope), and the concrete per-category classes (`FacebookAuthError`, `FacebookRateLimitError`, …).
+
+> The SDK still throws the original `AxiosError` for direct requests, and `sdk.batch([...])` still returns the same `{ status, data }` results — `onError` only *observes* them. A hook that throws or rejects is swallowed so it can never mask the underlying error.
+
+---
+
 ## Project layout
 
 ```
 src/
 ├── client.ts              Public entry — createFbSdk + re-exports
+├── errors.ts              Public error surface ("@tabsircg/fb-sdk/errors")
 ├── httpClient.ts          Axios wrapper, request → BatchableRequest
 ├── internal/
 │   ├── batchable.ts       createBatchableRequest, buildRelativeUrl
 │   ├── fetchers.ts        Page-level comment aggregator
 │   ├── poller.ts          poll() + pollVideoStatus / pollReelStatus
-│   ├── error.ts           FacebookUploadError
+│   ├── error.ts           FacebookUploadError + typed FacebookError model & hook
 │   └── utils.ts           toGraphFields (selector → Graph string)
 ├── lib/
 │   └── transformCase.ts   toCamel / toSnake + KeysToCamel / KeysToSnake types
@@ -331,7 +392,7 @@ Bug reports, type-system gotchas, and PRs for missing Graph resources are all we
 - Mirror the existing resource shape: a `createXResource({ http, id, config? })` factory returning typed methods that each produce a `BatchableRequest<T>`.
 - Type the raw API shape as a `*Raw` interface (snake_case) and export the camelCase view as `KeysToCamel<*Raw>`. This is how every type stays in sync without duplication.
 - Add a unit test under `tests/unit/` for runtime behaviour and a `.test-d.ts` under `tests/types/` for the type surface — especially `@ts-expect-error` cases for what *shouldn't* compile.
-- Don't add retry / rate-limit logic without discussion. There's an early prototype commented out in `src/internal/error.ts`; the current direction is to leave retries to the caller.
+- Don't add retry / rate-limit logic without discussion; the current direction is to leave retries to the caller. The typed errors expose what a retry layer would need — `category` (`rate_limit`/`transient`/`policy_block` are retryable), `isTransient`, and `FacebookRateLimitError.usage`.
 
 ---
 
