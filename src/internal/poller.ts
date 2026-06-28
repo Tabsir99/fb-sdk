@@ -1,6 +1,8 @@
 import { type ListMedia } from "../resources/PageResource.js";
 import { type GetMedia } from "../resources/PostResource.js";
 import { type FacebookMedia } from "../types/facebookmedia.js";
+import { type InstagramContainer } from "../types/instagram.js";
+import { type BatchableRequest } from "../types/shared.js";
 import { FacebookUploadError } from "./error.js";
 
 interface PollConfig {
@@ -78,4 +80,25 @@ export const pollReelStatus = poll(
     return undefined;
   },
   { maxAttempts: 30, intervalMs: 10000 },
+);
+
+export type GetContainerStatus = (id: string) => BatchableRequest<InstagramContainer>;
+
+// Instagram publishing container poller. Unlike the FB video/reel pollers,
+// polling here is the designed happy path (not 504 recovery): a container must
+// reach FINISHED before media_publish. Cadence follows Meta's guidance —
+// every 5s, up to ~5 minutes — and containers expire after 24h regardless.
+export const pollContainerStatus = poll(
+  async (getStatus: GetContainerStatus, containerId: string) => {
+    const { statusCode, status } = await getStatus(containerId);
+    if (statusCode === "ERROR") {
+      throw new FacebookUploadError(status ?? "Instagram container failed to process");
+    }
+    if (statusCode === "EXPIRED") {
+      throw new FacebookUploadError("Instagram container expired before it was published");
+    }
+    if (statusCode === "FINISHED") return { containerId };
+    return undefined;
+  },
+  { maxAttempts: 60, intervalMs: 5000 },
 );

@@ -1,6 +1,7 @@
 import { createHttpClient, type HttpClient } from "./httpClient.js";
 import { createPostResource } from "./resources/PostResource.js";
 import { createPageResource } from "./resources/PageResource.js";
+import { createInstagramResource } from "./resources/instagram/InstagramResource.js";
 import { createUserResource } from "./resources/UserResource.js";
 import { createCommentResource } from "./resources/comment/CommentResource.js";
 import type { Store } from "./store/types.js";
@@ -35,6 +36,7 @@ export function createFbSdk(config: FbSdkConfig = {}) {
     return {
       post: (postId: string) => createPostResource({ http, id: postId, config }),
       page: (pageId: string) => createPageResource({ http, id: pageId, config }),
+      instagram: (igUserId: string) => createInstagramResource({ http, id: igUserId, config }),
       comment: (commentId: string) => createCommentResource({ http, id: commentId, config }),
       me: createUserResource({ http, config, id: "me" }),
       http,
@@ -56,6 +58,7 @@ export type { PageCommentConfig } from "./resources/comment/CommentResource.js";
 
 export type * from "./types/facebookinsights.js";
 export type * from "./types/facebookmedia.js";
+export type * from "./types/instagram.js";
 export type * from "./types/facebookpage.js";
 export type * from "./types/facebookpost.js";
 export type * from "./types/facebookuser.js";
