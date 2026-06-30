@@ -139,3 +139,68 @@ export interface InstagramPublishCarouselParams {
 export interface InstagramPublishResult {
   mediaId: string;
 }
+
+// ─── Account (user) node ─────────────────────────────────────────────────────
+
+interface InstagramUserRaw {
+  id: string;
+  username: string;
+  name?: string;
+  biography?: string;
+  website?: string;
+  profile_picture_url?: string;
+  followers_count?: number;
+  follows_count?: number;
+  media_count?: number;
+}
+
+/** An Instagram professional account node (camelCase view) from `GET /{ig-user-id}`. */
+export type InstagramUser = KeysToCamel<InstagramUserRaw>;
+
+// ─── Comments ────────────────────────────────────────────────────────────────
+
+interface InstagramCommentAuthorRaw {
+  id: string;
+  username: string;
+}
+
+interface InstagramCommentRaw {
+  id: string;
+  text: string;
+  timestamp: string;
+  username?: string;
+  like_count?: number;
+  hidden?: boolean;
+  from?: InstagramCommentAuthorRaw;
+  parent_id?: string;
+  media?: { id: string; media_product_type?: InstagramMediaProductType };
+  replies?: CollectionOf<InstagramCommentRaw>;
+}
+
+/** An Instagram comment node (camelCase view). Note: IG has no comment-like API. */
+export type InstagramComment = KeysToCamel<InstagramCommentRaw>;
+
+/** Body for creating a top-level comment or a reply — IG accepts only `message`. */
+export type InstagramCommentParams = { message: string };
+
+/** Result of creating a comment or reply: the new comment id. */
+export interface InstagramCommentResult {
+  id: string;
+}
+
+/** Result of a moderation toggle (hide/unhide, enable/disable comments). */
+export interface InstagramSuccessResult {
+  success: boolean;
+}
+
+// ─── Mentions ────────────────────────────────────────────────────────────────
+
+/**
+ * Reply to an @-mention. Provide `commentId` to reply to a comment the account
+ * was mentioned in; omit it to reply on a media caption-mention.
+ */
+export interface InstagramMentionReplyParams {
+  mediaId: string;
+  message: string;
+  commentId?: string;
+}
