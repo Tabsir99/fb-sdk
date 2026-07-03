@@ -1,4 +1,4 @@
-import axios, { isAxiosError, type AxiosRequestConfig } from "axios";
+import axios, { isAxiosError, type AxiosInstance, type AxiosRequestConfig } from "axios";
 import { toCamel, toSnakeObj } from "./lib/transformCase.js";
 import FormData from "form-data";
 import { createBatchableRequest, buildRelativeUrl, toUrlEncodedBody } from "./internal/batchable.js";
@@ -15,22 +15,43 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 
 export const api = axios.create({ family: 4, timeout: DEFAULT_TIMEOUT_MS });
 
-const fbApi = axios.create({
-  baseURL: "https://graph.facebook.com/v25.0",
-  family: 4,
-  timeout: DEFAULT_TIMEOUT_MS,
-  headers: { "Accept-Encoding": "gzip, deflate, br" },
-  // Camelizes KEYS of every JSON response. Non-JSON bodies (proxy HTML, empty
-  // responses) pass through raw instead of masking the real error with a SyntaxError.
-  transformResponse: (data: unknown) => {
-    if (typeof data !== "string" || data.length === 0) return data;
-    try {
-      return toCamel(JSON.parse(data));
-    } catch {
-      return data;
-    }
-  },
-});
+/**
+ * Graph hosts the SDK talks to. Facebook is the default (Facebook Graph API);
+ * Instagram is used by the standalone Instagram SDK (Instagram API with Instagram
+ * Login). Same request/response shape — only the base URL and token differ.
+ */
+export const GRAPH_HOSTS = {
+  facebook: "https://graph.facebook.com/v25.0",
+  instagram: "https://graph.instagram.com/v25.0",
+} as const;
+
+export type GraphHost = keyof typeof GRAPH_HOSTS;
+
+// One axios instance per base URL, created lazily and reused for connection keep-alive.
+const graphApiCache = new Map<string, AxiosInstance>();
+
+function getGraphApi(baseURL: string): AxiosInstance {
+  const cached = graphApiCache.get(baseURL);
+  if (cached) return cached;
+  const instance = axios.create({
+    baseURL,
+    family: 4,
+    timeout: DEFAULT_TIMEOUT_MS,
+    headers: { "Accept-Encoding": "gzip, deflate, br" },
+    // Camelizes KEYS of every JSON response. Non-JSON bodies (proxy HTML, empty
+    // responses) pass through raw instead of masking the real error with a SyntaxError.
+    transformResponse: (data: unknown) => {
+      if (typeof data !== "string" || data.length === 0) return data;
+      try {
+        return toCamel(JSON.parse(data));
+      } catch {
+        return data;
+      }
+    },
+  });
+  graphApiCache.set(baseURL, instance);
+  return instance;
+}
 
 type Data = FormData | Record<string, unknown> | null;
 
@@ -44,6 +65,8 @@ export interface HttpClient {
 export interface CreateHttpClientOptions {
   /** Invoked with a strictly-typed error whenever a request fails or returns an error body. */
   onError?: FacebookErrorHook | undefined;
+  /** Which Graph host to target. Defaults to `"facebook"`. */
+  host?: GraphHost | undefined;
 }
 
 // A thrown failure: prefer the Graph envelope on the response, else treat it as transport-level.
@@ -81,6 +104,7 @@ export function createHttpClient(
   options?: CreateHttpClientOptions,
 ): HttpClient {
   const onError = options?.onError;
+  const graphApi = getGraphApi(GRAPH_HOSTS[options?.host ?? "facebook"]);
 
   return {
     get: (path, reqOptions) => {
@@ -89,7 +113,7 @@ export function createHttpClient(
       return createBatchableRequest("GET", relativeUrl, async () => {
         try {
           // reqOptions is spread FIRST so the merged params (with access_token) always win.
-          const res = await fbApi.get(path, {
+          const res = await graphApi.get(path, {
             ...reqOptions,
             params: { access_token: accessToken, ...params },
           });
@@ -115,7 +139,7 @@ export function createHttpClient(
         relativeUrl,
         async () => {
           try {
-            const res = await fbApi.post(path, isForm ? data : toSnakeObj(data), {
+            const res = await graphApi.post(path, isForm ? data : toSnakeObj(data), {
               ...reqOptions,
               headers: { ...reqOptions?.headers, ...(isForm ? data.getHeaders() : {}) },
               params: { access_token: accessToken, ...params },
@@ -136,7 +160,7 @@ export function createHttpClient(
       const relativeUrl = buildRelativeUrl(path, params);
       return createBatchableRequest("DELETE", relativeUrl, async () => {
         try {
-          const res = await fbApi.delete(path, {
+          const res = await graphApi.delete(path, {
             ...reqOptions,
             params: { access_token: accessToken, ...params },
           });

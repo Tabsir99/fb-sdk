@@ -98,7 +98,15 @@ What ships today:
 | Webhook   | `createWebhookHandler`                      | `handleVerify`, `handleEvent` (signature-verified, store-recording) |
 | Stores    | `createMemoryStore`, `createRedisStore`     | In-process and Redis sorted-set backed                              |
 
-Not covered yet: ads, business management, leadgen retrieval, messenger, marketing API, instagram, app events. PRs welcome — see [Contributing](#contributing).
+Instagram is a **separate SDK** — `createInstagramSdk()(igToken)` — talking to `graph.instagram.com` (Instagram API with Instagram Login), fully decoupled from the Facebook token:
+
+| Area      | Resource                                    | Operations                                                          |
+| --------- | ------------------------------------------- | ------------------------------------------------------------------- |
+| Account   | `ig.account(id)`                            | `get`, `media` (publish/list), `insights`, `mentions`, `stories`, `tags` |
+| Media     | `ig.media(id)`                              | `get`, `insights`, `comments`, `setCommentEnabled`                  |
+| Comment   | `ig.comment(id)`                            | `get`, `reply`, `replies`, `hide`, `delete`                         |
+
+Not covered yet: ads, business management, leadgen retrieval, messenger, marketing API, app events. PRs welcome — see [Contributing](#contributing).
 
 ---
 

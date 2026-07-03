@@ -11,9 +11,9 @@ export type ListInstagramStories = ListEdge<InstagramMedia>;
 export type ListInstagramTags = ListEdge<InstagramMedia>;
 
 /**
- * Instagram hub for a single IG professional account (the IG-User id discovered
- * via a Page's `instagram_business_account` field). Exposes the account node,
- * its media edge (publishing + listing), insights, mentions, stories and tags.
+ * Instagram hub for a single IG professional account (the authenticated IG-User
+ * under Instagram Login). Exposes the account node, its media edge (publishing +
+ * listing), insights, mentions, stories and tags.
  */
 export function createInstagramResource(params: CreateResourceParams) {
   const { http, id } = params;
