@@ -25,6 +25,7 @@
     "check": "npm run lint && npm run test",
     "dev": "tsx src/temp/test.ts",
     "lint": "eslint .",
+    "prebuild": "rm -rf dist",
     "prepublishOnly": "npm run build",
     "test": "vitest run"
   },
