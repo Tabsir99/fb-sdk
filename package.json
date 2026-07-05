@@ -1,6 +1,6 @@
 {
   "name": "@tabsircg/fb-sdk",
-  "version": "1.2.2",
+  "version": "2.0.0",
   "description": "Small, strongly-typed Facebook Graph API SDK for Node.js — typed field selectors, batching, uploads, webhooks",
   "main": "./dist/client.js",
   "private": false,
