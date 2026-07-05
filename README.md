@@ -14,7 +14,7 @@ It started as the Facebook layer for a scheduling tool (Scheduly) and was extrac
 - **One primitive: `BatchableRequest<T>`.** Every Graph call returns a thenable that doubles as a batch sub-request. The same value can be `await`-ed directly or passed into `sdk.batch([...])`.
 - **Automatic camelCase ↔ snake_case** at both runtime and type level. You write `createdTime`, the API sees `created_time`, you await `createdTime` again.
 - **Native batch API** with automatic chunking past Facebook's 50-request limit.
-- **First-class webhook + store.** A page-feed webhook handler plus an in-memory and a Redis store, used for efficient comment fan-out across many posts.
+- **First-class webhooks.** Facebook + Instagram webhooks normalized into one typed `onEvent` stream, plus an in-memory and a Redis store for store-accelerated comment fan-out.
 - **Async upload helpers** for videos, reels, and images — including the 3-phase reel upload session, status polling, and 504 recovery.
 - **Typed error hook.** An optional `onError` reports a strictly-typed `FacebookError` — a discriminated union you narrow on `.category`, with a `raw` escape hatch — for every failed request and batch sub-response. Observational: it never changes what's thrown or returned.
 
@@ -95,7 +95,7 @@ What ships today:
 | Post      | `sdk.post(id)`                              | `get`, `expire`, `comments`, `insights`                             |
 | Comment   | `sdk.comment(id)`                           | `get`, `update`, `delete`, `like`, `unlike`, `reply`, `replies`     |
 | Batch     | `sdk.batch`                                 | Up to 50 per request, auto-chunked                                  |
-| Webhook   | `createWebhookHandler`                      | `handleVerify`, `handleEvent` (signature-verified, store-recording) |
+| Webhook   | `createWebhookHandler`                      | `handleVerify`, `handleEvent` — signature-verified, typed `onEvent` dispatch (FB + IG) |
 | Stores    | `createMemoryStore`, `createRedisStore`     | In-process and Redis sorted-set backed                              |
 
 Instagram is a **separate SDK** — `createInstagramSdk()(igToken)` — talking to `graph.instagram.com` (Instagram API with Instagram Login), fully decoupled from the Facebook token:
@@ -220,13 +220,30 @@ import {
 } from "@tabsircg/fb-sdk";
 
 const store = createMemoryStore();
-
 const sdk = createFbSdk({ store });
 
 const webhook = createWebhookHandler({
-  store,
   verifyToken: process.env.FB_VERIFY_TOKEN!,
   appSecret: process.env.FB_APP_SECRET!,
+  store, // optional — auto-records FB Page comment activity for store-accelerated reads
+  onEvent: async (event) => {
+    switch (event.type) {
+      case "comment.added":
+        // event.platform: "facebook" | "instagram" — narrow for the differing fields
+        if (event.platform === "instagram") {
+          await notify(event.mediaId, event.commentId, event.text);
+        } else {
+          await notify(event.postId, event.commentId, event.text);
+        }
+        break;
+      case "mention.created":
+        await flagMention(event);
+        break;
+      // comment.edited | comment.removed | comment.hidden | comment.unhidden
+      // post.published | reaction.added | reaction.removed
+      // review.created | review.updated | unknown
+    }
+  },
 });
 
 const app = express();
@@ -238,10 +255,13 @@ app.post("/webhook", webhook.handleEvent);
 
 The handler:
 
-- Verifies the `X-Hub-Signature-256` HMAC against `appSecret` (timing-safe comparison).
-- Responds `200` immediately (FB will retry otherwise) and processes the payload in the background.
-- For `feed` changes of type `comment` with verb `add`, calls `store.recordActivity(pageId, postId, time)`.
-- Reports background failures (e.g. store outages) to the optional `onError` callback instead of crashing the process after the response is sent.
+- Verifies the `X-Hub-Signature-256` HMAC against `appSecret` (timing-safe), responds `200` immediately (Meta retries otherwise), then processes in the background.
+- Parses **Facebook and Instagram** payloads — including both Instagram login shapes (flat `field`/`value` and nested `changes[]`) and the `from`/`sender_*` author variants — into one normalized, camelCase `WebhookEvent` union. Switch on `event.type`, narrow on `event.platform`.
+- Delivers anything not modeled (DMs/messaging, `live_comments`, `story_insights`) as an `unknown` event with the original payload on `event.raw` — captured, never dropped.
+- If a `store` is supplied, Facebook Page comment-adds are recorded automatically (`recordActivity`) so store-accelerated reads keep working — independent of `onEvent`.
+- Routes background failures (store outages, a throwing `onEvent`) to the optional `onError` callback instead of crashing after the response is sent.
+
+**Event types:** `comment.added` · `comment.edited` · `comment.removed` · `comment.hidden` · `comment.unhidden` · `post.published` · `reaction.added` · `reaction.removed` · `mention.created` · `review.created` · `review.updated` · `unknown`.
 
 Then your reader uses the same store:
 
@@ -362,7 +382,8 @@ src/
 │   ├── memory.ts          createMemoryStore
 │   └── redis.ts           createRedisStore + RedisLike interface
 ├── webhook/
-│   └── handler.ts         createWebhookHandler
+│   ├── handler.ts         createWebhookHandler
+│   └── normalize.ts       raw payload → WebhookEvent[]
 └── types/
     ├── shared.ts          FbFieldSelector, FbPickDeep, DeepStrict, BatchableRequest
     ├── facebookpost.ts    FacebookPost / Comment / write-op params
@@ -370,7 +391,7 @@ src/
     ├── facebookuser.ts    FacebookUser
     ├── facebookmedia.ts   FacebookMedia + publish params
     ├── facebookinsights.ts Page/Post metric maps, InsightResult shapes
-    └── webhook.ts         WebhookPayload discriminated unions
+    └── webhook.ts         Raw envelope + normalized WebhookEvent union
 
 tests/
 ├── unit/                  vitest runtime tests

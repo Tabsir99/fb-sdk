@@ -1,10 +1,10 @@
 # Webhooks and stores
 
-The webhook handler and the comment-aggregation resource are two halves of one design: **Facebook tells you when a post receives a comment; the SDK remembers that and uses it to skip dead posts when you read.**
+The webhook handler normalizes Facebook and Instagram webhooks into one typed event stream you consume via `onEvent`. One *built-in* behavior pairs it with the comment-aggregation resource: **Meta tells you when a post receives a comment; the SDK remembers that and uses it to skip dead posts when you read.**
 
 This doc covers:
 - The `Store` interface and its two implementations.
-- The webhook handler — what it verifies, what it records.
+- The webhook handler — what it verifies, how it normalizes events, and the built-in comment recorder.
 - How `sdk.page(id).comments.list(...)` uses the store to avoid scanning all posts.
 
 Files: [`src/store/`](../src/store/), [`src/webhook/handler.ts`](../src/webhook/handler.ts), [`src/resources/comment/PageCommentResource.ts`](../src/resources/comment/PageCommentResource.ts).
@@ -62,11 +62,19 @@ export interface RedisLike {
 
 ```ts
 const webhook = createWebhookHandler({
-  store,
   verifyToken: process.env.FB_VERIFY_TOKEN!,
   appSecret: process.env.FB_APP_SECRET!,
-  // optional — background failures (store writes) land here instead of
-  // becoming unhandled rejections after the 200 was already sent
+  // your logic — one normalized event stream for Facebook + Instagram
+  onEvent: (event) => {
+    switch (event.type) {
+      case "comment.added": /* event.platform: "facebook" | "instagram" */ break;
+      case "mention.created": /* … */ break;
+    }
+  },
+  // optional — enables the built-in FB comment-activity recorder (store-accelerated reads)
+  store,
+  // optional — background failures (store writes, a throwing onEvent) land here
+  // instead of becoming unhandled rejections after the 200 was already sent
   onError: (err) => console.error("webhook processing failed", err),
 });
 
@@ -81,9 +89,10 @@ Implements Facebook's subscribe-token handshake. Returns `200 <challenge>` when 
 ### `handleEvent` (POST)
 
 1. **Verifies signature.** Reads `X-Hub-Signature-256` and recomputes `sha256 = HMAC-SHA256(rawBody, appSecret)`, comparing with `crypto.timingSafeEqual`. If signature is missing or mismatched, returns `403` and stops.
-2. **Responds 200 immediately.** Facebook expects sub-second responses or it retries — heavy work runs *after* `res.send`.
-3. **Walks `payload.entry[].changes[]`.** Entries without a `changes` array (other subscription types, e.g. messaging) are skipped. For every change of `field === "feed"` where `value.item === "comment"`, `value.verb === "add"`, and `value.post_id` is present, calls `store.recordActivity(pageId, post_id, value.created_time)`.
-4. **Settles all store writes** before resolving. Failures never escape the handler — each rejected write is reported through `onError` (if configured) and otherwise swallowed, because the HTTP response is already gone.
+2. **Responds 200 immediately.** Meta expects sub-second responses or it retries — heavy work runs *after* `res.send`.
+3. **Normalizes the payload.** Parses all three entry shapes — `changes[]`, `messaging[]`, and Instagram-Login's flat `field`/`value` — for both `object: "page"` and `object: "instagram"`, unifying the `from`/`sender_*` author variants and the two IG comment shapes into one camelCase `WebhookEvent` union (see [`normalize.ts`](../src/webhook/normalize.ts)). Anything unmodeled (DMs, `live_comments`, `story_insights`) becomes an `unknown` event carrying the raw payload on `event.raw`.
+4. **Dispatches each event.** Every event is passed to `onEvent` (if configured). *Independently*, if a `store` is set, Facebook Page `comment.added` events are recorded via `store.recordActivity(accountId, postId, createdTime)` — the built-in behavior that powers store-accelerated reads.
+5. **Settles all work** before resolving. Failures never escape the handler — each rejected `onEvent` call or store write is reported through `onError` (if configured) and otherwise swallowed, because the HTTP response is already gone.
 
 The framework is unopinionated about which web library you use. The handler takes a minimal `{ status, send }`-shaped response and `{ query, headers, body, rawBody }`-shaped request — any of express, fastify, hono, etc., fit.
 
@@ -95,9 +104,10 @@ The framework is unopinionated about which web library you use. The handler take
 
 ### What it does NOT do
 
-- It does not handle `reaction`, `share`, or `post` add/edit events. They're modeled in [`src/types/webhook.ts`](../src/types/webhook.ts) but the handler ignores them today.
-- It does not retry store writes on failure.
-- It does not deduplicate. If FB sends the same event twice, `recordActivity` is called twice — that's fine for sorted sets and for the in-memory map (both idempotent on identical inputs), but assume at-least-once semantics.
+- The built-in **store recorder** only records Facebook Page `comment.added` events. Reactions, posts, mentions, reviews, and every Instagram event are still delivered to `onEvent` — they're just not written to the store. Handle those in `onEvent` yourself.
+- It does not retry `onEvent` or store writes on failure.
+- It does not deduplicate. Meta delivers **at-least-once, unordered, with no replay** — if the same event arrives twice, `onEvent` fires twice. Dedup on a natural key (e.g. `commentId` + `type`) and treat newest-`createdTime`-wins yourself. (The store already does newest-wins via `ZADD GT`.)
+- It does not fetch follow-up data. Instagram `mention.created` events are id-only — resolve the text via the Graph API when you need it.
 
 ---
 

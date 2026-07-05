@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { createHmac } from "crypto";
 import { createWebhookHandler } from "../../src/webhook/handler.js";
 import type { Store } from "../../src/store/types.js";
-import type { WebhookPayload } from "../../src/types/webhook.js";
+import type { WebhookEvent, WebhookPayload } from "../../src/types/webhook.js";
 
 const APP_SECRET = "shhh-secret";
 const VERIFY_TOKEN = "verify-me";
@@ -184,6 +184,193 @@ describe("createWebhookHandler", () => {
 
       expect(res.statusCode).toBe(200);
       expect(store.recordActivity).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("onEvent dispatch", () => {
+    it("dispatches a normalized facebook comment.added event", async () => {
+      const events: WebhookEvent[] = [];
+      const handler = createWebhookHandler({
+        verifyToken: VERIFY_TOKEN,
+        appSecret: APP_SECRET,
+        onEvent: (e) => {
+          events.push(e);
+        },
+      });
+      const res = createMockRes();
+
+      await handler.handleEvent(eventRequest(commentPayload), res);
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "comment.added",
+        platform: "facebook",
+        accountId: "page1",
+        commentId: "c1",
+        postId: "post1",
+        parentId: "post1",
+        createdTime: 1234,
+      });
+    });
+
+    it("runs the built-in store recorder and onEvent together", async () => {
+      const store = createMockStore();
+      const events: WebhookEvent[] = [];
+      const handler = createWebhookHandler({
+        store,
+        verifyToken: VERIFY_TOKEN,
+        appSecret: APP_SECRET,
+        onEvent: (e) => {
+          events.push(e);
+        },
+      });
+      const res = createMockRes();
+
+      await handler.handleEvent(eventRequest(commentPayload), res);
+
+      expect(store.recordActivity).toHaveBeenCalledWith("page1", "post1", 1234);
+      expect(events.map((e) => e.type)).toEqual(["comment.added"]);
+    });
+
+    it("routes an onEvent throw to onError without affecting the 200", async () => {
+      const boom = new Error("handler boom");
+      const onError = vi.fn();
+      const handler = createWebhookHandler({
+        verifyToken: VERIFY_TOKEN,
+        appSecret: APP_SECRET,
+        onEvent: () => {
+          throw boom;
+        },
+        onError,
+      });
+      const res = createMockRes();
+
+      await handler.handleEvent(eventRequest(commentPayload), res);
+
+      expect(res.statusCode).toBe(200);
+      expect(onError).toHaveBeenCalledWith(boom);
+    });
+  });
+
+  describe("instagram normalization (both login shapes)", () => {
+    const igFlatComment = {
+      object: "instagram",
+      entry: [
+        {
+          id: "ig1",
+          time: 2000,
+          field: "comments",
+          value: {
+            id: "igc1",
+            from: { id: "u1", username: "fan" },
+            text: "fire",
+            media: { id: "m1", media_product_type: "FEED" },
+          },
+        },
+      ],
+    };
+
+    const igChangesComment = {
+      object: "instagram",
+      entry: [
+        {
+          id: "ig1",
+          time: 2001,
+          changes: [
+            {
+              field: "comments",
+              value: {
+                comment_id: "igc2",
+                parent_id: "p1",
+                from: { id: "u2", username: "buyer" },
+                text: "price?",
+                media: { id: "m2" },
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    it("normalizes a flat Instagram-Login comment and leaves the FB store untouched", async () => {
+      const store = createMockStore();
+      const events: WebhookEvent[] = [];
+      const handler = createWebhookHandler({
+        store,
+        verifyToken: VERIFY_TOKEN,
+        appSecret: APP_SECRET,
+        onEvent: (e) => {
+          events.push(e);
+        },
+      });
+      const res = createMockRes();
+
+      await handler.handleEvent(eventRequest(igFlatComment), res);
+
+      expect(store.recordActivity).not.toHaveBeenCalled();
+      expect(events).toHaveLength(1);
+      const e = events[0];
+      expect(e).toMatchObject({
+        type: "comment.added",
+        platform: "instagram",
+        accountId: "ig1",
+        commentId: "igc1",
+        mediaId: "m1",
+        text: "fire",
+      });
+      if (e?.type === "comment.added" && e.platform === "instagram") {
+        expect(e.from).toEqual({ id: "u1", username: "fan" });
+      }
+    });
+
+    it("normalizes an FB-Login Instagram comment (changes[] shape) identically", async () => {
+      const events: WebhookEvent[] = [];
+      const handler = createWebhookHandler({
+        verifyToken: VERIFY_TOKEN,
+        appSecret: APP_SECRET,
+        onEvent: (e) => {
+          events.push(e);
+        },
+      });
+      const res = createMockRes();
+
+      await handler.handleEvent(eventRequest(igChangesComment), res);
+
+      expect(events[0]).toMatchObject({
+        type: "comment.added",
+        platform: "instagram",
+        commentId: "igc2",
+        parentId: "p1",
+        mediaId: "m2",
+        text: "price?",
+      });
+    });
+
+    it("captures unmodeled entries (DMs) as an unknown event rather than dropping them", async () => {
+      const events: WebhookEvent[] = [];
+      const handler = createWebhookHandler({
+        verifyToken: VERIFY_TOKEN,
+        appSecret: APP_SECRET,
+        onEvent: (e) => {
+          events.push(e);
+        },
+      });
+      const res = createMockRes();
+      const payload = {
+        object: "instagram",
+        entry: [
+          {
+            id: "ig1",
+            time: 3,
+            messaging: [{ sender: { id: "s" }, recipient: { id: "r" }, timestamp: 1 }],
+          },
+        ],
+      };
+
+      await handler.handleEvent(eventRequest(payload), res);
+
+      expect(events).toHaveLength(1);
+      expect(events[0]?.type).toBe("unknown");
     });
   });
 });
