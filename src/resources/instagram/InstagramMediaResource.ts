@@ -17,13 +17,19 @@ import {
 
 type ContainerResponse = { id?: string };
 
+/** Publish a single image post from a public image URL. */
 export type PublishImage = (params: InstagramPublishImageParams) => Promise<InstagramPublishResult>;
+/** Publish a reel from a public video URL. */
 export type PublishReel = (params: InstagramPublishReelParams) => Promise<InstagramPublishResult>;
+/** Publish an image or video story. */
 export type PublishStory = (params: InstagramPublishStoryParams) => Promise<InstagramPublishResult>;
+/** Publish a 2-10 item image/video carousel. */
 export type PublishCarousel = (
   params: InstagramPublishCarouselParams,
 ) => Promise<InstagramPublishResult>;
+/** Read the account's rolling 24h publish-quota usage. */
 export type GetContentPublishingLimit = () => BatchableRequest<ContentPublishingLimit>;
+/** List the account's published media. */
 export type ListInstagramMedia = ListEdge<InstagramMedia>;
 
 // A carousel child is its own container: video children must be tagged VIDEO.
@@ -40,20 +46,17 @@ function carouselItemBody(item: InstagramCarouselItem): Record<string, unknown> 
  * these return `Promise<T>` and cannot be embedded in `sdk.batch([...])`.
  */
 export function createInstagramMediaResource({ http, id }: CreateResourceParams) {
-  // The processing gate before media_publish.
   const getContainerStatus: GetContainerStatus = (containerId) =>
     http.get<InstagramContainer>(`/${containerId}`, {
       params: { fields: "status_code,status" },
     });
 
-  // Step 1 — create a media container; returns the creation_id.
   const createContainer = async (body: Record<string, unknown>): Promise<string> => {
     const { id: containerId } = await http.post<ContainerResponse>(`/${id}/media`, body);
     if (!containerId) throw new FacebookUploadError("Instagram container creation returned no id");
     return containerId;
   };
 
-  // Step 2 — publish a finished container; returns the live media id.
   const publishContainer = async (creationId: string): Promise<InstagramPublishResult> => {
     const { id: mediaId } = await http.post<ContainerResponse>(`/${id}/media_publish`, {
       creationId,
@@ -69,10 +72,13 @@ export function createInstagramMediaResource({ http, id }: CreateResourceParams)
     return publishContainer(creationId);
   };
 
+  /** Publish a single image post from a public image URL. */
   const publishImage: PublishImage = (params) => runPublish({ ...params });
 
+  /** Publish a reel from a public video URL. */
   const publishReel: PublishReel = (params) => runPublish({ ...params, mediaType: "REELS" });
 
+  /** Publish a story; requires exactly one of imageUrl or videoUrl. */
   const publishStory: PublishStory = async (params) => {
     const hasImage = Boolean(params.imageUrl);
     const hasVideo = Boolean(params.videoUrl);
@@ -82,6 +88,7 @@ export function createInstagramMediaResource({ http, id }: CreateResourceParams)
     return runPublish({ ...params, mediaType: "STORIES" });
   };
 
+  /** Publish a 2-10 item image/video carousel. */
   const publishCarousel: PublishCarousel = async ({ children, ...rest }) => {
     if (children.length < 2 || children.length > 10) {
       throw new FacebookUploadError("An Instagram carousel requires between 2 and 10 items");
@@ -91,7 +98,7 @@ export function createInstagramMediaResource({ http, id }: CreateResourceParams)
     return runPublish({ ...rest, mediaType: "CAROUSEL", children: childIds });
   };
 
-  // Live publish quota — read it rather than hardcoding (Meta's docs disagree, 50 vs 100/24h).
+  /** Read the account's rolling 24h publish-quota usage and limit. */
   const contentPublishingLimit: GetContentPublishingLimit = () =>
     http
       .get<{ data: ContentPublishingLimit[] }>(`/${id}/content_publishing_limit`, {
@@ -100,6 +107,7 @@ export function createInstagramMediaResource({ http, id }: CreateResourceParams)
       // This edge always returns exactly one row.
       .transform((res) => res.data[0]!);
 
+  /** List this account's published media. */
   const list: ListInstagramMedia = (query) =>
     http.get(`/${id}/media`, {
       params: { fields: toGraphFields(query.fields), ...query.options },

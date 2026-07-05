@@ -22,21 +22,32 @@ import { createPageInsightResource } from "./InsightResource.js";
 import { type CreateResourceParams } from "../client.js";
 import { isAxiosError } from "axios";
 
+/** Creates the Page resource hub: videos, reels, images (photos), post feed, comments, and insights. */
 export function createPageResource(params: CreateResourceParams) {
   return {
+    /** Videos on the Page: list and publish. */
     videos: createVideosResource(params),
+    /** Reels on the Page: list and publish. */
     reels: createReelsResource(params),
+    /** Photos on the Page: publish. */
     images: createImagesResource(params),
+    /** The Page's post feed: list. */
     posts: createPostsResource(params),
+    /** Comments aggregated across the Page's posts. */
     comments: createPageCommentsResource(params),
+    /** Page-level insight metrics. */
     insights: createPageInsightResource(params),
   };
 }
 
+/** Query signature for listing a Page's post feed. */
 export type ListPosts = ListEdge<FacebookPost>;
+/** Fetch signature for a single post node. */
 export type GetPost = GetNode<FacebookPost>;
 
+/** Creates the Page's post-feed resource. */
 export const createPostsResource = ({ http, id }: CreateResourceParams) => {
+  /** Lists posts on the Page's feed; `limit` is capped at 100. */
   const list: ListPosts = (query) => {
     if (query.options?.limit) query.options.limit = Math.min(query.options.limit, 100);
     return http.get(`/${id}/posts`, {
@@ -49,15 +60,20 @@ export const createPostsResource = ({ http, id }: CreateResourceParams) => {
   };
 };
 
+/** Publishes a video to the Page; resolves with the new post id. */
 export type PublishVideo = (data: PublishVideoParams) => Promise<{ postId: string }>;
+/** Query signature for listing a Page's media (videos/reels). */
 export type ListMedia = ListEdge<FacebookMedia>;
 
+/** Creates the Page videos resource: list and publish videos. */
 export function createVideosResource({ http, id }: CreateResourceParams) {
+  /** Lists videos on the Page. */
   const list: ListMedia = (query) =>
     http.get(`/${id}/videos`, {
       params: { fields: toGraphFields(query.fields), ...query.options },
     });
 
+  /** Publishes a video to the Page; resolves with the new post id. */
   const publish: PublishVideo = async (data) => {
     const trackingId = randomUUID();
     try {
@@ -97,15 +113,21 @@ export function createVideosResource({ http, id }: CreateResourceParams) {
   };
 }
 
+/** Starts a resumable reel upload session; returns the video id and upload URL. */
 export type StartUploadSession = () => Promise<{
   videoId: string;
   uploadUrl: string;
 }>;
+/** Uploads reel bytes to the session's upload URL from a remote file URL. */
 export type UploadFile = (uploadUrl: string, fileUrl: string) => Promise<void>;
+/** Finalizes a reel upload session. */
 export type FinishUploadSession = (form: FormData) => Promise<PublishReelResponse>;
+/** Publishes a reel to the Page; resolves with the new post id. */
 export type PublishReel = (data: PublishReelParams) => Promise<{ postId: string }>;
 
+/** Creates the Page reels resource: list and publish reels. */
 export function createReelsResource({ http, id }: CreateResourceParams) {
+  /** Lists reels on the Page. */
   const list: ListMedia = (query) =>
     http.get(`/${id}/video_reels`, {
       params: { fields: toGraphFields(query.fields), ...query.options },
@@ -127,6 +149,7 @@ export function createReelsResource({ http, id }: CreateResourceParams) {
     return await http.post(`/${id}/video_reels`, form);
   };
 
+  /** Publishes a reel to the Page via a resumable upload session; resolves with the new post id. */
   const publish: PublishReel = async (data) => {
     const { thumbnailUrl, fileUrl, ...apiFields } = data;
 
@@ -159,9 +182,12 @@ export function createReelsResource({ http, id }: CreateResourceParams) {
   };
 }
 
+/** Publishes a photo to the Page; resolves with the new post id. */
 export type PublishImage = (data: PublishImageParams) => Promise<{ postId: string }>;
 
+/** Creates the Page images resource: publish photos. */
 export function createImagesResource({ http, id }: CreateResourceParams) {
+  /** Publishes a photo to the Page; resolves with the new post id. */
   const publish: PublishImage = async (data) => {
     const form = toSnakeFormData({ ...data, published: true });
     const { postId } = await http.post<PublishImageResponse>(`/${id}/photos`, form);

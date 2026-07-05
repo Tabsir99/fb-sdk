@@ -27,6 +27,7 @@ const getProcessingError = (status: FacebookMedia["status"]) => {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Wrap an async fn into a poller: retry until it resolves a defined value, else throw after `maxAttempts`. */
 export function poll<TArgs extends unknown[], TResult>(
   fn: (...args: TArgs) => Promise<TResult | undefined>,
   config: PollConfig = {},
@@ -45,6 +46,7 @@ export function poll<TArgs extends unknown[], TResult>(
   };
 }
 
+/** Poll a Page's video list until the tracked upload finishes publishing; throws {@link FacebookUploadError} on a processing error. */
 export const pollVideoStatus = poll(
   async (listVideos: ListMedia, trackingId: string) => {
     const videos = await listVideos({
@@ -53,8 +55,7 @@ export const pollVideoStatus = poll(
         postId: true,
         universalVideoId: true,
       },
-      // Without an explicit limit the default page (~25) can miss the tracked
-      // upload on busy pages and falsely time out.
+      // Explicit high limit: the default page (~25) can miss the tracked upload on busy pages and falsely time out.
       options: { limit: 100 },
     });
     const target = videos.data.find((v) => v.universalVideoId === trackingId);
@@ -71,6 +72,7 @@ export const pollVideoStatus = poll(
   { maxAttempts: 30, intervalMs: 20000 },
 );
 
+/** Poll a reel until it has a `postId`; throws {@link FacebookUploadError} on a processing error. */
 export const pollReelStatus = poll(
   async (getReel: GetMedia) => {
     const { postId, status } = await getReel({ postId: true, status: true });
@@ -82,12 +84,13 @@ export const pollReelStatus = poll(
   { maxAttempts: 30, intervalMs: 10000 },
 );
 
+/** Fetch an Instagram publishing container's status by id. */
 export type GetContainerStatus = (id: string) => BatchableRequest<InstagramContainer>;
 
-// Instagram publishing container poller. Unlike the FB video/reel pollers,
-// polling here is the designed happy path (not 504 recovery): a container must
-// reach FINISHED before media_publish. Cadence follows Meta's guidance —
-// every 5s, up to ~5 minutes — and containers expire after 24h regardless.
+/**
+ * Poll an Instagram publishing container until `FINISHED`; throws {@link FacebookUploadError} on `ERROR`/`EXPIRED`.
+ * @remarks Polling is the designed happy path — a container must reach FINISHED before media_publish; every 5s up to ~5 min, and containers expire after 24h.
+ */
 export const pollContainerStatus = poll(
   async (getStatus: GetContainerStatus, containerId: string) => {
     const { statusCode, status } = await getStatus(containerId);

@@ -13,6 +13,7 @@ import type { FacebookErrorContext } from "./types/facebookerror.js";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
+/** Bare axios instance (IPv4, default timeout); not bound to a Graph host. */
 export const api = axios.create({ family: 4, timeout: DEFAULT_TIMEOUT_MS });
 
 /**
@@ -25,6 +26,7 @@ export const GRAPH_HOSTS = {
   instagram: "https://graph.instagram.com/v25.0",
 } as const;
 
+/** Which Graph host to target — a key of {@link GRAPH_HOSTS}. */
 export type GraphHost = keyof typeof GRAPH_HOSTS;
 
 // One axios instance per base URL, created lazily and reused for connection keep-alive.
@@ -38,8 +40,7 @@ function getGraphApi(baseURL: string): AxiosInstance {
     family: 4,
     timeout: DEFAULT_TIMEOUT_MS,
     headers: { "Accept-Encoding": "gzip, deflate, br" },
-    // Camelizes KEYS of every JSON response. Non-JSON bodies (proxy HTML, empty
-    // responses) pass through raw instead of masking the real error with a SyntaxError.
+    // Camelize JSON response keys; non-JSON bodies (proxy HTML, empty) pass through raw so real errors aren't masked as SyntaxError.
     transformResponse: (data: unknown) => {
       if (typeof data !== "string" || data.length === 0) return data;
       try {
@@ -55,6 +56,7 @@ function getGraphApi(baseURL: string): AxiosInstance {
 
 type Data = FormData | Record<string, unknown> | null;
 
+/** Token-scoped Graph HTTP client. Each verb returns a {@link BatchableRequest}: await it, or pass it to `sdk.batch`. */
 export interface HttpClient {
   get<T>(path: string, options?: AxiosRequestConfig): BatchableRequest<T>;
   post<T>(path: string, data: Data, options?: AxiosRequestConfig): BatchableRequest<T>;
@@ -62,6 +64,7 @@ export interface HttpClient {
   getToken(): string;
 }
 
+/** Options for {@link createHttpClient}. */
 export interface CreateHttpClientOptions {
   /** Invoked with a strictly-typed error whenever a request fails or returns an error body. */
   onError?: FacebookErrorHook | undefined;
@@ -99,6 +102,7 @@ function reportResponseError(
   if (fbError) invokeErrorHook(onError, fbError, { method, relativeUrl, accessToken, source: "request" });
 }
 
+/** Create a token-scoped {@link HttpClient} for the given Graph host (default `facebook`). */
 export function createHttpClient(
   accessToken: string,
   options?: CreateHttpClientOptions,
@@ -129,8 +133,7 @@ export function createHttpClient(
       const params = reqOptions?.params ?? {};
       const relativeUrl = buildRelativeUrl(path, params);
       const isForm = data instanceof FormData;
-      // Captured at construction so the request carries its body into sdk.batch([...]).
-      // FormData bodies (media uploads) cannot be embedded in a batch.
+      // Captured at construction so the body travels into sdk.batch([...]); FormData (media uploads) can't be embedded in a batch.
       const body =
         !isForm && data ? toUrlEncodedBody(toSnakeObj(data) as Record<string, unknown>) : undefined;
 

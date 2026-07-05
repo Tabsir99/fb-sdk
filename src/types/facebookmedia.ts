@@ -33,19 +33,21 @@ interface MediaRaw {
   universal_video_id?: string;
 }
 
+/** A Facebook video media node (camelCase view). */
 export type FacebookMedia = KeysToCamel<MediaRaw>;
 
+/** Result of a video publish: `id` on success, or `error.code`. */
 export type PublishVideoResponse =
   | { id: string; error?: undefined }
   | { error: { code: number }; id: undefined };
 
+/** Result of a reel publish: `postId` on success, or `error.code`; `success` flags the outcome. */
 export type PublishReelResponse =
   | { postId: string; error?: undefined; success: boolean }
   | { error: { code: number }; postId: undefined; success: boolean };
 
+/** Result of a photo publish: the media `id` and its owning `postId`. */
 export type PublishImageResponse = { id: string; postId: string };
-
-// ─── Shared API Structures ───
 
 interface CustomLabelsRaw {
   id: string;
@@ -79,7 +81,6 @@ interface FeedTargetingRaw {
   interests: string[];
 }
 
-// Fields that map directly to the Facebook API
 interface VideoUploadParamsRaw {
   title?: string | null;
   description?: string | null;
@@ -89,11 +90,15 @@ interface VideoUploadParamsRaw {
 }
 type VideoUploadParams = KeysToCamel<VideoUploadParamsRaw>;
 
+/** Params to publish a video from a public `fileUrl`. */
 export interface PublishVideoParams extends VideoUploadParams {
+  /** Public URL of a custom thumbnail image. */
   thumbnailUrl?: string | undefined;
 }
 
+/** Params to publish a reel from a public `fileUrl`. */
 export interface PublishReelParams extends VideoUploadParams {
+  /** Public URL of a custom thumbnail image. */
   thumbnailUrl?: string | undefined;
 }
 
@@ -104,4 +109,5 @@ interface PublishImageParamsRaw {
   feed_targeting?: FeedTargetingRaw;
 }
 
+/** Params to publish a photo from a public `url`. */
 export type PublishImageParams = KeysToCamel<PublishImageParamsRaw>;

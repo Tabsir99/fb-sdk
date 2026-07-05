@@ -8,6 +8,7 @@ function serializeEdgeOptions(options?: Record<string, unknown>): string {
     .join("");
 }
 
+/** Serialize a nested field-selector object into a Graph API `fields` string, encoding edge options as `.opt(value)`. */
 export function toGraphFields(fields: Record<string, any>): string {
   return Object.entries(fields)
     .filter(([, value]) => value !== undefined && value !== false)
@@ -21,7 +22,6 @@ export function toGraphFields(fields: Record<string, any>): string {
         return `${snakeKey}${opts}{${toGraphFields(value.fields)}}`;
       }
 
-      // Plain nested field selector
       return `${snakeKey}{${toGraphFields(value)}}`;
     })
     .join(",");

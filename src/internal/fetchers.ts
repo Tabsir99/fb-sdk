@@ -20,6 +20,7 @@ type FetchComments = (
   nextCursors: Record<string, string>;
 }>;
 
+/** Batch-fetch comments across the given posts, tag each with its parent post, and return per-post next-page cursors. */
 export const fetchComments: FetchComments = async (http, { postIds, query, cursors }) => {
   const batch = createBatchResource(http);
 

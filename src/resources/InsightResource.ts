@@ -13,6 +13,7 @@ import { type BatchableRequest, type FbFieldSelector } from "../types/shared.js"
 import { type InsightRawResponseCamelCase } from "../types/facebookinsights.js";
 
 const createInsightResource = <TMetrics>(http: HttpClient, id: string) => {
+  /** Queries the requested insight metrics; reduces each into a time series plus a running total (numeric metrics) or latest snapshot (non-numeric). */
   const list = <F extends FbFieldSelector<TMetrics>>(
     query: InsightQuery<TMetrics, F>,
   ): BatchableRequest<InsightResponse<TMetrics, F>> => {
@@ -59,8 +60,10 @@ const createInsightResource = <TMetrics>(http: HttpClient, id: string) => {
   return { list };
 };
 
+/** Creates the Page insights resource for querying Page-level metrics. */
 export const createPageInsightResource = ({ http, id }: CreateResourceParams) =>
   createInsightResource<PageInsightMetrics>(http, id);
 
+/** Creates the Post insights resource for querying post-level metrics. */
 export const createPostInsightResource = ({ http, id }: CreateResourceParams) =>
   createInsightResource<PostInsightMetrics>(http, id);

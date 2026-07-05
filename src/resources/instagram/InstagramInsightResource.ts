@@ -15,8 +15,7 @@ import {
   type InstagramMediaInsightMetrics,
 } from "../../types/instagraminsights.js";
 
-// Every metric collapses to { value, breakdowns?, timeSeries? }: `total_value`
-// drives the aggregate (and breakdowns); `values` drives the time series.
+// total_value → aggregate value (+ breakdowns); values → time series.
 function buildInsightResult(entry: InstagramInsightRawEntry): InstagramInsightResult {
   const series = entry.values ?? [];
   const result: InstagramInsightResult = {
@@ -44,6 +43,7 @@ const createInstagramInsightResource = <TMetrics, TOptions = InstagramInsightOpt
   http: HttpClient,
   id: string,
 ) => {
+  /** Query the requested metrics; each resolves to a value with optional breakdowns and time series. */
   const list = <F extends FbFieldSelector<TMetrics>>(
     query: InstagramInsightQuery<TMetrics, F, TOptions>,
   ): BatchableRequest<InstagramInsightResponse<TMetrics, F>> => {

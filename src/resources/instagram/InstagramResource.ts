@@ -6,8 +6,11 @@ import { createInstagramMediaResource } from "./InstagramMediaResource.js";
 import { createInstagramAccountInsightResource } from "./InstagramInsightResource.js";
 import { createInstagramMentionsResource } from "./InstagramMentionsResource.js";
 
+/** Read fields off the IG professional account node. */
 export type GetInstagramAccount = GetNode<InstagramUser>;
+/** List the account's currently active stories. */
 export type ListInstagramStories = ListEdge<InstagramMedia>;
+/** List media other users have @-tagged this account in. */
 export type ListInstagramTags = ListEdge<InstagramMedia>;
 
 /**
@@ -18,15 +21,17 @@ export type ListInstagramTags = ListEdge<InstagramMedia>;
 export function createInstagramResource(params: CreateResourceParams) {
   const { http, id } = params;
 
+  /** Fetch fields off this account node. */
   const get: GetInstagramAccount = (fields) =>
     http.get(`/${id}`, { params: { fields: toGraphFields(fields) } });
 
+  /** List the account's currently active stories. */
   const stories: ListInstagramStories = (query) =>
     http.get(`/${id}/stories`, {
       params: { fields: toGraphFields(query.fields), ...query.options },
     });
 
-  // Media this account has been @-tagged in by other users.
+  /** List media other users have @-tagged this account in. */
   const tags: ListInstagramTags = (query) =>
     http.get(`/${id}/tags`, {
       params: { fields: toGraphFields(query.fields), ...query.options },
@@ -34,8 +39,11 @@ export function createInstagramResource(params: CreateResourceParams) {
 
   return {
     get,
+    /** Publishing pipeline (image/reel/story/carousel) and media listing. */
     media: createInstagramMediaResource(params),
+    /** Account-level insights — reach, views, follower demographics. */
     insights: createInstagramAccountInsightResource(params),
+    /** Read @-mentions of this account and reply to them. */
     mentions: createInstagramMentionsResource(params),
     stories,
     tags,

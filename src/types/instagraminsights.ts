@@ -1,10 +1,7 @@
 import type { KeysToCamel } from "../lib/transformCase.js";
 import type { FbFieldSelector, FbPickDeep, Fields } from "./shared.js";
 
-// ─── Metric maps ─────────────────────────────────────────────────────────────
-// Every Instagram insight resolves to the same friendly shape (value + optional
-// breakdowns/time-series), so these maps exist only to type the selectable
-// metric names. The `number` values just mark each metric as a selectable leaf.
+// Map values are leaf markers only; every metric resolves to the same friendly result shape.
 
 interface InstagramMediaInsightMetricsMap {
   reach: number;
@@ -62,8 +59,6 @@ interface InstagramAccountInsightMetricsMap {
 /** Selectable metric names for `GET /{ig-user-id}/insights`. */
 export type InstagramAccountInsightMetrics = KeysToCamel<InstagramAccountInsightMetricsMap>;
 
-// ─── Options ─────────────────────────────────────────────────────────────────
-
 /** A single insight breakdown dimension. */
 export type InstagramInsightBreakdownDimension =
   | "action_type"
@@ -77,21 +72,26 @@ export type InstagramInsightBreakdownDimension =
   | "country"
   | "gender";
 
+/** Query options for a media or account insights request. */
 export interface InstagramInsightOptions {
+  /** Aggregation window for each data point. */
   period?: "day" | "week" | "days_28" | "month" | "lifetime" | "total_over_range";
   breakdown?: InstagramInsightBreakdownDimension;
+  /** Lower time bound, Unix seconds. */
   since?: number;
+  /** Upper time bound, Unix seconds. */
   until?: number;
 }
 
+/** Insight options specific to account-level metrics. */
 export interface InstagramAccountInsightOptions extends InstagramInsightOptions {
+  /** `total_value` returns an aggregate; `time_series` returns daily points. */
   metricType?: "total_value" | "time_series";
   /** Required for demographic metrics. Only `this_week`/`this_month` remain valid. */
   timeframe?: "this_week" | "this_month";
 }
 
-// ─── Query ───────────────────────────────────────────────────────────────────
-
+/** A typed Instagram insights request: selected metric names plus options. */
 export type InstagramInsightQuery<
   TMetrics,
   F extends FbFieldSelector<TMetrics>,
@@ -101,14 +101,14 @@ export type InstagramInsightQuery<
   options?: TOptions;
 };
 
-// ─── Raw API shape (keys already camelized by the HTTP layer) ────────────────
-
+/** A raw insight entry (keys already camelized by the HTTP layer). */
 export interface InstagramInsightRawEntry {
   name: string;
   period?: string;
   title?: string;
   description?: string;
   values?: { value: number; endTime?: string }[];
+  /** Present for `metricType: "total_value"`: the aggregate and any breakdowns. */
   totalValue?: {
     value?: number;
     breakdowns?: {
@@ -119,28 +119,32 @@ export interface InstagramInsightRawEntry {
   id?: string;
 }
 
+/** Raw `/insights` response envelope. */
 export interface InstagramInsightRawResponse {
   data: InstagramInsightRawEntry[];
   paging?: { previous?: string; next?: string };
 }
 
-// ─── Friendly SDK result shapes ──────────────────────────────────────────────
-
+/** One cell of a breakdown: the dimension values and their metric value. */
 export interface InstagramInsightBreakdownResult {
   dimensionValues: string[];
   value: number;
 }
 
+/** A metric broken down by one or more dimensions. */
 export interface InstagramInsightBreakdown {
   dimensionKeys: string[];
   results: InstagramInsightBreakdownResult[];
 }
 
+/** One point in an account-metric time series. */
 export interface InstagramInsightDataPoint {
   value: number;
+  /** Unix timestamp (seconds) at the end of this point's period. */
   endTime: number;
 }
 
+/** Normalized result for a single Instagram metric. */
 export interface InstagramInsightResult {
   /** Aggregate value (`total_value.value`, or the sum of the time series). */
   value: number;
@@ -150,6 +154,7 @@ export interface InstagramInsightResult {
   timeSeries?: InstagramInsightDataPoint[];
 }
 
+/** Response shape: each selected metric mapped to its {@link InstagramInsightResult}. */
 export type InstagramInsightResponse<TMetrics, F extends FbFieldSelector<TMetrics>> = {
   [K in keyof FbPickDeep<TMetrics, F>]: InstagramInsightResult;
 };

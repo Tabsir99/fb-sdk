@@ -9,6 +9,7 @@ import type {
   RawFacebookError,
 } from "../types/facebookerror.js";
 
+/** Media upload/processing failure; `status` carries the last known upload status when available. */
 export class FacebookUploadError extends Error {
   constructor(
     message: string,
@@ -19,14 +20,10 @@ export class FacebookUploadError extends Error {
   }
 }
 
-// ─── Typed Graph API error model ───
-//
-// A class-based discriminated union: narrow on `.category`, or use `instanceof`
-// (FacebookErrorBase = any SDK error, FacebookGraphError = any error carrying a
-// Graph envelope). `code`/`subcode` are kept `number` on purpose — Facebook's
-// code space is open-ended and version-volatile (see types/facebookerror.ts).
-
-/** Common base for every error this SDK surfaces (Graph envelope or transport). */
+/**
+ * Common base for every error this SDK surfaces (Graph envelope or transport).
+ * @remarks Class-based discriminated union — narrow on `.category`, or use `instanceof` ({@link FacebookErrorBase} = any SDK error, {@link FacebookGraphError} = any Graph-envelope error). `code`/`subcode` stay `number`: Facebook's code space is open-ended and version-volatile.
+ */
 export abstract class FacebookErrorBase extends Error {
   abstract readonly category: FacebookErrorCategory;
   /** Unprocessed payload behind this error — the escape hatch when the typed surface is too narrow. */
@@ -193,8 +190,6 @@ export const FacebookAuthSubcode = {
   INVALID_PAGE_ROLE: 492,
 } as const;
 
-// ─── Detection & construction ───
-
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null;
 
@@ -347,7 +342,5 @@ export function invokeErrorHook(
   }
 }
 
-// Retry/backoff is intentionally NOT implemented here — the current direction is
-// to leave retries to the caller (see README → Contributing). The typed errors
-// above expose what a retry layer needs: `category` (rate_limit/transient/
-// policy_block are retryable), `isTransient`, and FacebookRateLimitError.usage.
+// Retry/backoff is intentionally left to the caller (see README → Contributing);
+// the typed errors expose what a retry layer needs (`category`, `isTransient`, rate-limit `usage`).

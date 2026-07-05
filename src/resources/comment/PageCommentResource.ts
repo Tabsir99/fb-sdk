@@ -5,7 +5,6 @@ import { type Collection, type Fields, type FbFieldSelector, ORDER } from "../..
 import { createPostsResource } from "../PageResource.js";
 import { type CreateResourceParams } from "../../client.js";
 
-// ─── Cursor Encoding ───
 interface AggregationCursor {
   cursors: Record<string, string>;
 }
@@ -27,22 +26,23 @@ function decodeCursor(encoded: string): AggregationCursor {
 
 type PageComment = KeysToCamel<CommentWithPost>;
 
+/** Lists comments aggregated across a Page's recent posts as one paginated stream. */
 export type GetPageComments = <F extends FbFieldSelector<PageComment>>(query: {
   fields: Fields<PageComment, F>;
   options?: CommentEdgeOptions;
 }) => Promise<Collection<PageComment, F>>;
 
+/** Creates the Page comments resource that aggregates comments across the Page's posts. */
 export function createPageCommentsResource({ http, id, config }: CreateResourceParams) {
   const PostResource = createPostsResource({ http, id });
   const store = config?.store;
   const postsLimit = Math.min(config?.postsLimit ?? 50, 100);
 
   /**
-   * Aggregated page-level comments from multiple posts.
-   *
-   * Not batchable — this is a multi-step aggregation, not a single Graph API call.
+   * Lists comments aggregated across the Page's recent posts as one paginated
+   * stream via an encoded multi-post cursor; uses the webhook-fed store to target
+   * recently-active posts when available. Not batchable — multi-step aggregation.
    */
-
   const list: GetPageComments = async (query) => {
     const { since, until, after } = query.options ?? {};
 

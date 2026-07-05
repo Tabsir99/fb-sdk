@@ -4,6 +4,7 @@ import { createInstagramMediaNodeResource } from "./resources/instagram/Instagra
 import { createInstagramCommentResource } from "./resources/instagram/InstagramCommentResource.js";
 import type { FacebookErrorHook } from "./internal/error.js";
 
+/** Configuration for {@link createInstagramSdk}. */
 export interface InstagramSdkConfig {
   /**
    * Invoked after a response is received but before it is returned/thrown,
@@ -20,6 +21,10 @@ export interface InstagramSdkConfig {
  *
  * Nodes are keyed by their own id, so `media`/`comment` are top-level (mirroring
  * the Facebook SDK's `post`/`comment`), not chained under `account`.
+ *
+ * @example
+ * const ig = createInstagramSdk()("IG_USER_ACCESS_TOKEN");
+ * const media = await ig.media("MEDIA_ID").get({ caption: true });
  */
 export function createInstagramSdk(config: InstagramSdkConfig = {}) {
   return (accessToken: string) => {

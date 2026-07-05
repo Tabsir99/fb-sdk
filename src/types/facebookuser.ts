@@ -13,4 +13,5 @@ interface FacebookUserRaw {
   };
 }
 
+/** A Facebook user (id, name, profile picture) in camelCase view. */
 export type FacebookUser = KeysToCamel<FacebookUserRaw>;

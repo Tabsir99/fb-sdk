@@ -7,6 +7,7 @@ import type { Store } from "./store/types.js";
 import { createBatchResource } from "./resources/createBatchResource.js";
 import type { FacebookErrorHook } from "./internal/error.js";
 
+/** Configuration for {@link createFbSdk}. */
 export interface FbSdkConfig {
   /** Webhook-fed store enabling targeted comment fetching of recently-active posts. */
   store?: Store;
@@ -23,27 +24,41 @@ export interface FbSdkConfig {
   onError?: FacebookErrorHook;
 }
 
+/** Inputs shared by the resource factories: http client, node id, and config. */
 export interface CreateResourceParams {
   http: HttpClient;
   id: string;
   config?: FbSdkConfig;
 }
 
+/**
+ * Create the Facebook Graph API SDK. Returns a factory that takes an access
+ * token and yields a token-scoped client.
+ *
+ * @example
+ * const client = createFbSdk()("PAGE_ACCESS_TOKEN");
+ * const post = await client.post("POST_ID").get({ message: true });
+ */
 export function createFbSdk(config: FbSdkConfig = {}) {
   return (accessToken: string) => {
     const http = createHttpClient(accessToken, { onError: config.onError });
     return {
+      /** Operate on a single post node by id. */
       post: (postId: string) => createPostResource({ http, id: postId, config }),
+      /** Operate on a Page node by id. */
       page: (pageId: string) => createPageResource({ http, id: pageId, config }),
+      /** Operate on a single comment node by id. */
       comment: (commentId: string) => createCommentResource({ http, id: commentId, config }),
+      /** The token owner's user node (`me`). */
       me: createUserResource({ http, config, id: "me" }),
+      /** Escape hatch: the raw Graph http client. */
       http,
+      /** Combine batchable requests into a single Graph API batch call. */
       batch: createBatchResource(http, { onError: config.onError }),
     };
   };
 }
 
-// Standalone Instagram SDK (graph.instagram.com, Instagram Login) — decoupled from Facebook.
 export { createInstagramSdk } from "./instagramClient.js";
 export type { InstagramSdkConfig } from "./instagramClient.js";
 export { createMemoryStore } from "./store/memory.js";

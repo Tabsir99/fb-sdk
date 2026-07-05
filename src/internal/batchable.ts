@@ -1,6 +1,10 @@
 import type { BatchableRequest } from "../client.js";
 import { toSnakeCase } from "../lib/transformCase.js";
 
+/**
+ * Build a {@link BatchableRequest}: await it to run `executor`, or collect it into a Graph batch; `.transform()` maps the resolved value.
+ * @remarks Single-flight — `executor` runs at most once however many times it's awaited; `.transform()` children share the parent's in-flight call.
+ */
 export function createBatchableRequest<T>(
   method: string,
   relativeUrl: string,
@@ -8,8 +12,6 @@ export function createBatchableRequest<T>(
   _transform?: (raw: any) => any,
   body?: string,
 ): BatchableRequest<T> {
-  // Single-flight: the executor runs at most once no matter how many times the
-  // request is awaited; .transform() children share the parent's in-flight call.
   let inflight: Promise<T> | undefined;
   const run = () => (inflight ??= executor());
 
@@ -40,6 +42,7 @@ export function createBatchableRequest<T>(
   return req;
 }
 
+/** Build a Graph relative URL (`path?snake_key=encoded&...`), skipping undefined params. */
 export function buildRelativeUrl(path: string, params: Record<string, unknown>): string {
   const stripped = path.startsWith("/") ? path.slice(1) : path;
   const parts: string[] = [];

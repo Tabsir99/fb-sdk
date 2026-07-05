@@ -5,7 +5,9 @@ import { type InstagramMedia, type InstagramSuccessResult } from "../../types/in
 import { createInstagramCommentsResource } from "./InstagramCommentResource.js";
 import { createInstagramMediaInsightResource } from "./InstagramInsightResource.js";
 
+/** Read fields off a published media node. */
 export type GetInstagramMedia = GetNode<InstagramMedia>;
+/** Enable or disable commenting on the media. */
 export type SetInstagramCommentEnabled = (
   enabled: boolean,
 ) => BatchableRequest<InstagramSuccessResult>;
@@ -17,17 +19,20 @@ export type SetInstagramCommentEnabled = (
 export function createInstagramMediaNodeResource(params: CreateResourceParams) {
   const { http, id } = params;
 
+  /** Fetch fields off this media node. */
   const get: GetInstagramMedia = (fields) =>
     http.get(`/${id}`, { params: { fields: toGraphFields(fields) } });
 
-  // POST /{media-id}?comment_enabled=bool — turn commenting on/off for this media.
+  /** Enable or disable commenting on this media. */
   const setCommentEnabled: SetInstagramCommentEnabled = (enabled) =>
     http.post<InstagramSuccessResult>(`/${id}`, { commentEnabled: enabled });
 
   return {
     get,
     setCommentEnabled,
+    /** Comments edge — list and create comments on this media. */
     comments: createInstagramCommentsResource(params),
+    /** Media-level insights — reach, likes, saves, shares. */
     insights: createInstagramMediaInsightResource(params),
   };
 }

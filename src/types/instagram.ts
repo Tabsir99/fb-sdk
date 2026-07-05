@@ -1,8 +1,6 @@
 import { type KeysToCamel } from "../lib/transformCase.js";
 import { type CollectionOf } from "./shared.js";
 
-// ─── Read model ──────────────────────────────────────────────────────────────
-
 /** Value of a media node's `media_type` field. A reel reports `VIDEO` here. */
 export type InstagramMediaTypeRead = "IMAGE" | "VIDEO" | "CAROUSEL_ALBUM";
 /** Distinguishes a reel (`REELS`) from a plain feed video — both report media_type `VIDEO`. */
@@ -38,8 +36,7 @@ interface InstagramMediaRaw {
 /** A published Instagram media node (camelCase view). */
 export type InstagramMedia = KeysToCamel<InstagramMediaRaw>;
 
-// ─── Publishing: container status ────────────────────────────────────────────
-
+/** Lifecycle status of a publishing container. */
 export type ContainerStatusCode =
   | "EXPIRED"
   | "ERROR"
@@ -57,8 +54,6 @@ interface InstagramContainerRaw {
 /** A media-publishing container node, polled until status_code is `FINISHED`. */
 export type InstagramContainer = KeysToCamel<InstagramContainerRaw>;
 
-// ─── Publishing: quota ───────────────────────────────────────────────────────
-
 interface ContentPublishingLimitRaw {
   quota_usage: number;
   config: {
@@ -70,9 +65,7 @@ interface ContentPublishingLimitRaw {
 /** Rolling publish-quota usage from `/{ig-user-id}/content_publishing_limit`. */
 export type ContentPublishingLimit = KeysToCamel<ContentPublishingLimitRaw>;
 
-// ─── Publishing: params ──────────────────────────────────────────────────────
-// Prefixed `Instagram*` because Facebook's publish params (PublishImageParams,
-// PublishReelParams, …) share the same root names and are also publicly exported.
+// `Instagram*` prefix avoids clashing with the exported Facebook publish params.
 
 /** A person tag. Coordinates apply to image media; reels/video accept just `username`. */
 export interface InstagramUserTag {
@@ -81,12 +74,14 @@ export interface InstagramUserTag {
   y?: number;
 }
 
+/** A product tag for shopping-enabled media. */
 export interface InstagramProductTag {
   productId: string;
   x?: number;
   y?: number;
 }
 
+/** Params to publish a single image. */
 export interface InstagramPublishImageParams {
   /** Publicly reachable image URL — Meta fetches it server-side (no binary upload). */
   imageUrl: string;
@@ -99,6 +94,7 @@ export interface InstagramPublishImageParams {
   shareToFacebook?: boolean;
 }
 
+/** Params to publish a reel. */
 export interface InstagramPublishReelParams {
   /** Publicly reachable video URL — Meta fetches it server-side (no binary upload). */
   videoUrl: string;
@@ -122,10 +118,12 @@ export interface InstagramPublishStoryParams {
   videoUrl?: string;
 }
 
+/** One carousel child: an image or a video, each with optional user tags. */
 export type InstagramCarouselItem =
   | { imageUrl: string; userTags?: InstagramUserTag[] }
   | { videoUrl: string; userTags?: InstagramUserTag[] };
 
+/** Params to publish a carousel of images/videos. */
 export interface InstagramPublishCarouselParams {
   /** Between 2 and 10 items. Reels and stories cannot be carousel items. */
   children: InstagramCarouselItem[];
@@ -139,8 +137,6 @@ export interface InstagramPublishCarouselParams {
 export interface InstagramPublishResult {
   mediaId: string;
 }
-
-// ─── Account (user) node ─────────────────────────────────────────────────────
 
 interface InstagramUserRaw {
   id: string;
@@ -156,8 +152,6 @@ interface InstagramUserRaw {
 
 /** An Instagram professional account node (camelCase view) from `GET /{ig-user-id}`. */
 export type InstagramUser = KeysToCamel<InstagramUserRaw>;
-
-// ─── Comments ────────────────────────────────────────────────────────────────
 
 interface InstagramCommentAuthorRaw {
   id: string;
@@ -192,8 +186,6 @@ export interface InstagramCommentResult {
 export interface InstagramSuccessResult {
   success: boolean;
 }
-
-// ─── Mentions ────────────────────────────────────────────────────────────────
 
 /**
  * Reply to an @-mention. Provide `commentId` to reply to a comment the account

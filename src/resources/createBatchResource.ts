@@ -10,17 +10,22 @@ import {
   type FacebookErrorHook,
 } from "../internal/error.js";
 
+/** Per-call options for the batch executor. */
 export interface BatchRequestOptions {
   includeHeaders?: boolean;
 }
 
+/** Options for creating the batch resource. */
 export interface CreateBatchResourceOptions {
   /** Invoked with a strictly-typed error for each failed batch sub-response. */
   onError?: FacebookErrorHook | undefined;
 }
 
-// A failed sub-response: its `body` is a stringified JSON envelope (or non-JSON
-// on transport failure); the outer batch call already succeeded with HTTP 200.
+/**
+ * Reports a failed batch sub-response through the error hook. The outer batch
+ * call succeeds with HTTP 200 even when a sub-request fails; the failure lives
+ * in the sub-response's stringified `body` (or non-JSON on transport failure).
+ */
 function reportSubResponseError(
   req: BatchSubRequest,
   res: BatchSubResponse,
@@ -57,11 +62,13 @@ const processResponse = (req: BatchSubRequest, res: BatchSubResponse) => {
   return { status: res.code, data: res.body };
 };
 
+/** Creates the batch executor: sends many Graph requests in a single HTTP call. */
 export function createBatchResource(http: HttpClient, options?: CreateBatchResourceOptions) {
   const onError = options?.onError;
   // All sub-requests in a batch share the client's token (the batch's access_token).
   const accessToken = onError ? http.getToken() : "";
 
+  /** Runs the requests in chunks of 50; resolves to ordered `{ status, data }` results. */
   const batch = async <const T extends readonly BatchSubRequest[]>(
     requests: T,
     batchOptions?: BatchRequestOptions,
